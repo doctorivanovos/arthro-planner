@@ -1012,17 +1012,11 @@ function loadSettings(){
     if(Array.isArray(o.custom)) customList=sanitizeCustom(o.custom);
   }catch(e){}
   if(!surgeonList.length){
-    // миграция со старых счётчиков «универсальные/коленные» (или заводской состав 2+1)
-    let nU=2, nK=1;
-    try{ const o=JSON.parse(localStorage.getItem(SETTINGS_KEY)); if(o&&o.fields){
-      if(o.fields.surg_universal!=null) nU=Math.max(0,Math.round(parseFloat(o.fields.surg_universal)||0));
-      if(o.fields.surg_knee!=null) nK=Math.max(0,Math.round(parseFloat(o.fields.surg_knee)||0));
-    }}catch(e){}
-    for(let i=0;i<nU;i++) surgeonList.push({id:newSurgeonId(), name:'', ops:TYPES.slice()});
-    for(let i=0;i<nK;i++) surgeonList.push({id:newSurgeonId(), name:'', ops:['acl','meniscus']});
-    if(!surgeonList.length) surgeonList.push({id:newSurgeonId(), name:'', ops:TYPES.slice()});
+    // первый запуск: состав отделения по умолчанию (навыки — все операции; снимите лишние галочки)
+    DEFAULT_SURGEONS.forEach(nm=>surgeonList.push({id:newSurgeonId(), name:nm, ops:TYPES.slice()}));
   }
 }
+const DEFAULT_SURGEONS=['Захаров К.И.','Гиниятов А.Р.','Иванов А.А.','Тищенков К.А.','Гюльмагомедов Л.Г.','Иванов М.А.'];
 function resetAll(){
   if(!confirm('Сбросить ВСЕ настройки к заводским? Журнал остатка дня, таймеры стерилизации и окна столов очистятся.')) return;
   try{ localStorage.removeItem(SETTINGS_KEY); localStorage.removeItem(STER_KEY); }catch(e){}
