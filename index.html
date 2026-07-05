@@ -102,6 +102,28 @@
   .chip .x{cursor:pointer;color:var(--muted);border:none;background:var(--line);width:18px;height:18px;
            border-radius:50%;line-height:1;font-size:12px}
   .chip .x:hover{color:#fff;background:var(--bad)}
+  /* быстрый план: стартовый экран-калькулятор */
+  .wiz{position:fixed;inset:0;z-index:100;background:rgba(42,37,32,.45);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:12px}
+  .wizcard{background:var(--bg);border-radius:16px;max-width:540px;width:100%;padding:16px 16px 20px;margin:auto 0;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+  .wizhead{display:flex;justify-content:space-between;align-items:center;font-size:17px;margin-bottom:4px;gap:10px}
+  .wizsec{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:10px}
+  .wizlbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:8px;font-weight:600}
+  .wizstep{display:inline-flex;align-items:center;gap:12px}
+  .wizstep button{width:44px;height:44px;border-radius:11px;border:1px solid var(--line);background:var(--panel2);font-size:22px;cursor:pointer;color:var(--txt);line-height:1}
+  .wizstep button:active{background:var(--accent);color:#fff}
+  .wizstep b{font-size:22px;min-width:32px;text-align:center;font-variant-numeric:tabular-nums}
+  .wizoprow{display:flex;align-items:center;gap:10px;margin:7px 0}
+  .wizoprow .nm{flex:1;font-size:15px}
+  .wizoprow .wizstep button{width:40px;height:40px;font-size:20px}
+  .wizoprow .wizstep b{font-size:19px}
+  .wizchips{display:flex;flex-wrap:wrap;gap:8px}
+  .wizchips .wchip{border:1px solid var(--line);background:var(--panel2);border-radius:99px;padding:10px 15px;font-size:14px;cursor:pointer;color:var(--muted)}
+  .wizchips .wchip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .wizres{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:12px 14px;margin-top:10px;font-size:14.5px}
+  .wizres .q{font:12.5px/1.7 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;margin-top:8px;color:var(--txt);overflow-x:auto}
+  .wizgo{width:100%;margin-top:12px;padding:14px;font-size:15.5px}
+  #wiz_date{font-size:15px;padding:9px 11px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
+  .wizday{margin-left:10px;color:var(--muted);font-size:13.5px}
   /* списание имплантов */
   .implbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px}
   .implbox .implhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:6px}
@@ -310,11 +332,38 @@
   </div>
   <div class="headact noprint">
     <label class="datelbl">День <input type="date" id="p_date" onchange="switchDay(this.value)"></label>
+    <button class="btn primary" onclick="openWizard()">Быстрый план</button>
     <button class="btn" onclick="newDay()">Новый день</button>
     <button class="btn" onclick="window.print()">Печать дня</button>
   </div>
   <div class="printhead" id="printHead"></div>
 </header>
+
+<!-- БЫСТРЫЙ ПЛАН: стартовый экран-калькулятор (особенно для телефона) -->
+<div id="wizard" class="wiz noprint" style="display:none">
+  <div class="wizcard">
+    <div class="wizhead"><b>Быстрый план дня</b><button class="btn sm" onclick="closeWizard()">Пропустить →</button></div>
+    <div class="wizsec">
+      <div class="wizlbl">1 · Какой день</div>
+      <input type="date" id="wiz_date" onchange="wizDate(this.value)"><span class="wizday" id="wizDayName"></span>
+    </div>
+    <div class="wizsec">
+      <div class="wizlbl">2 · Сколько столов работает</div>
+      <div class="wizstep"><button onclick="wizStep('p_tables',-1)">−</button><b id="wizTablesN">3</b><button onclick="wizStep('p_tables',1)">+</button></div>
+      <div class="note" id="wizTablesNote" style="margin-top:6px"></div>
+    </div>
+    <div class="wizsec">
+      <div class="wizlbl">3 · Кто сегодня оперирует <span style="text-transform:none;letter-spacing:0">— нажмите, чтобы включить/выключить</span></div>
+      <div class="wizchips" id="wizSurg"></div>
+    </div>
+    <div class="wizsec">
+      <div class="wizlbl">4 · Какие операции</div>
+      <div id="wizOps"></div>
+    </div>
+    <div class="wizres" id="wizRes"></div>
+    <button class="btn primary wizgo" onclick="closeWizard()">Готово — открыть полный план</button>
+  </div>
+</div>
 
 <div class="wrap">
 <div class="grid">
@@ -618,7 +667,7 @@ const TYPES = Object.keys(OPS);
 let surgeonList=[];   // [{id,name,ops:[типы операций]}]
 const newSurgeonId=()=>'sg'+Date.now()+Math.random().toString(36).slice(2,5);
 const surgeonName=(g,i)=>(g&&g.name&&g.name.trim())||('Хирург '+(i+1));
-function sanitizeSurgeons(arr){ return (arr||[]).map(g=>({id:g.id||newSurgeonId(), name:g.name||'', ops:Array.isArray(g.ops)?g.ops.filter(t=>OPS[t]):[]})); }
+function sanitizeSurgeons(arr){ return (arr||[]).map(g=>({id:g.id||newSurgeonId(), name:g.name||'', ops:Array.isArray(g.ops)?g.ops.filter(t=>OPS[t]):[], off:!!g.off})); }
 function addSurgeon(){ surgeonList.push({id:newSurgeonId(), name:'', ops:TYPES.slice()}); manualOps=null; saveSettings(); render(); const f=document.querySelectorAll('#surgeonRows input[type=text]'); if(f.length) f[f.length-1].focus(); }
 function removeSurgeon(id){ surgeonList=surgeonList.filter(g=>g.id!==id); manualOps=null; saveSettings(); render(); }
 function surgeonSet(id,v){ const g=surgeonList.find(x=>x.id===id); if(g) g.name=v; /* перерисует глобальный input-слушатель */ }
@@ -631,10 +680,52 @@ function renderSurgeons(){
   surgRenderedIds=ids;
   const esc=x=>(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   host.innerHTML=surgeonList.map((g,i)=>`<div class="surgrow" data-sid="${g.id}">
-    <input type="text" placeholder="Хирург ${i+1}" value="${esc(g.name)}" oninput="surgeonSet('${g.id}',this.value)">
+    <label class="skl" title="сегодня оперирует / отсутствует"><input type="checkbox"${g.off?'':' checked'} onchange="surgeonPresent('${g.id}',this.checked)">сегодня</label>
+    <input type="text" placeholder="Хирург ${i+1}" value="${esc(g.name)}" oninput="surgeonSet('${g.id}',this.value)"${g.off?' style="opacity:.5"':''}>
     ${TYPES.map(t=>`<label class="skl" title="${OPS[t].label}"><input type="checkbox"${(g.ops||[]).indexOf(t)>=0?' checked':''} onchange="surgeonToggle('${g.id}','${t}',this.checked)"><span class="dot" style="background:${OPS[t].color}"></span>${OPS[t].short}</label>`).join('')}
     <button class="x" onclick="removeSurgeon('${g.id}')" title="убрать хирурга">×</button>
   </div>`).join('') || '<div class="note">Хирургов нет — добавьте кнопкой ниже.</div>';
+}
+function surgeonPresent(id,on){ const g=surgeonList.find(x=>x.id===id); if(!g) return; g.off=!on; manualOps=null; surgRenderedIds=null; saveSettings(); render(); }
+
+/* ---------- быстрый план: стартовый экран-калькулятор ---------- */
+function openWizard(){ const w=$('wizard'); if(!w) return; w.style.display='flex'; render(); }
+function closeWizard(){ const w=$('wizard'); if(w) w.style.display='none'; }
+function wizDate(v){ if(v) gotoDay(v); }
+function wizStep(id,d){
+  const el=$(id); if(!el) return;
+  const min=(id==='p_tables')?1:0;
+  el.value=Math.max(min, Math.round((parseFloat(el.value)||0)+d));
+  if(id.indexOf('m_')===0 && useCases){ useCases=false; const c=$('use_cases'); if(c)c.checked=false; }
+  manualOps=null; saveSettings(); render();
+}
+function wizSurgToggle(id){ const g=surgeonList.find(x=>x.id===id); if(!g) return; g.off=!g.off; manualOps=null; surgRenderedIds=null; saveSettings(); render(); }
+function renderWizard(s, r){
+  const w=$('wizard'); if(!w || w.style.display==='none') return;
+  const d=$('p_date'), wd=$('wiz_date');
+  if(wd && d && wd.value!==d.value) wd.value=d.value;
+  const dn=$('wizDayName');
+  if(dn && d && d.value){ const dt=new Date(d.value+'T00:00'); dn.textContent=isNaN(dt.getTime())?'':dt.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'}); }
+  const N=stationCount(s);
+  $('wizTablesN').textContent=Math.round(s.tables);
+  $('wizTablesNote').textContent = s.tables>s.inv.towers ? `реально работает ${N} — больше не позволяют стойки (${Math.round(s.inv.towers)} шт.)` : '';
+  $('wizSurg').innerHTML = surgeonList.map((g,i)=>`<button class="wchip${g.off?'':' on'}" onclick="wizSurgToggle('${g.id}')">${escHtml(surgeonName(g,i))}</button>`).join('')
+    || '<span class="note" style="margin:0">хирургов нет — добавьте в «Ресурсы и хирурги»</span>';
+  $('wizOps').innerHTML = TYPES.map(t=>`<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizStep('m_${t}',-1)">−</button><b>${Math.round(num('m_'+t))}</b><button onclick="wizStep('m_${t}',1)">+</button></div></div>`).join('');
+  // живой результат: сколько влезает, во сколько закончим, очередь по столам
+  const total=r.sched.length, rej=Object.values(r.rejected).reduce((a,b)=>a+b,0);
+  const mk=r.sched.reduce((m,o)=>Math.max(m,o.end),0);
+  let head;
+  if(total===0 && rej===0) head='<span class="muted">Добавьте операции кнопками «+» — расчёт мгновенный.</span>';
+  else if(rej>0){ const top=Object.entries(r.blame).sort((a,b)=>b[1]-a[1])[0];
+    head=`<b style="color:var(--bad)">Влезает ${total} из ${total+rej}</b> · мешает: ${top?top[0]:'—'}${total?` · конец в <b>${fmtTime(mk)}</b>`:''}`; }
+  else head=`<b style="color:var(--ok)">✓ Всё влезает: ${total} операц.</b> · закончим в <b>${fmtTime(mk)}</b>`;
+  let q='';
+  for(let t=0;t<N;t++){
+    const onT=r.sched.filter(o=>o.tower===t).sort((a,b)=>a.start-b.start);
+    if(onT.length) q+=`Стол ${t+1}:  `+onT.map(o=>`${fmtTime(o.start)} ${(useCases&&caseList[o.oidx])?caseLabel(caseList[o.oidx]):opLabel(o)}`).join(' → ')+'\n';
+  }
+  $('wizRes').innerHTML=head+(q?`<div class="q">${escHtml(q)}</div>`:'');
 }
 
 const $ = id => document.getElementById(id);
@@ -1105,7 +1196,7 @@ function readState(){
     dur: {bankart:num('d_bankart'),cuff:num('d_cuff'),acl:num('d_acl'),meniscus:num('d_meniscus'),latarjet:num('d_latarjet')},
     anes: {bankart:num('a_bankart'),cuff:num('a_cuff'),acl:num('a_acl'),meniscus:num('a_meniscus'),latarjet:num('a_latarjet')},
     anesMode: {bankart:$('am_bankart').value,cuff:$('am_cuff').value,acl:$('am_acl').value,meniscus:$('am_meniscus').value,latarjet:$('am_latarjet').value},
-    surgeonList: surgeonList.map((g,i)=>({id:g.id, name:surgeonName(g,i), ops:(g.ops||[]).slice()})),
+    surgeonList: surgeonList.map((g,i)=>({id:g.id, name:surgeonName(g,i), ops:(g.ops||[]).slice(), off:!!g.off})).filter(g=>!g.off),
     anesTeams: Math.max(1, Math.round(num('p_anesteams'))||1),
     inv: {
       towers: num('inv_towers'), optics: num('inv_optics'), shavers: num('inv_shavers'),
@@ -1547,6 +1638,7 @@ function render(){
   renderDone(s);
   renderSeq();
   renderWeek();
+  renderWizard(s, r);
   const ph=$('printHead'); if(ph){ const ds=planDateStr(); ph.textContent=(ds?ds:'Операционный день')+' · операций: '+$('kpi_total').textContent+', до '+$('kpi_makespan').textContent; }
   saveSettings();
 }
@@ -1973,6 +2065,12 @@ if(curDay && dayStore[curDay]) applyDay(dayStore[curDay]);   // данные о�
 renderPresets();
 render();
 setupGanttDrag();
+// пустой день → сразу быстрый план (стартовый экран), особенно удобно с телефона
+(function(){
+  const planned = useCases ? caseList.length
+    : TYPES.reduce((a,t)=>a+Math.max(0,Math.round(num('m_'+t))),0) + customList.reduce((a,c)=>a+Math.max(0,Math.round(c.count||0)),0);
+  if(planned===0 && !doneLog.length && !manualBlocks.length) openWizard();
+})();
 </script>
 </body>
 </html>
