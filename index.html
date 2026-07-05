@@ -1014,6 +1014,9 @@ function loadSettings(){
   if(!surgeonList.length){
     // первый запуск: состав отделения по умолчанию (навыки — все операции; снимите лишние галочки)
     DEFAULT_SURGEONS.forEach(nm=>surgeonList.push({id:newSurgeonId(), name:nm, ops:TYPES.slice()}));
+  } else if(surgeonList.every(g=>!(g.name&&g.name.trim()))){
+    // сохранён старый безымянный состав («Хирург 1–3») — заменяем на реальный состав отделения
+    surgeonList=DEFAULT_SURGEONS.map(nm=>({id:newSurgeonId(), name:nm, ops:TYPES.slice(), off:false}));
   }
 }
 const DEFAULT_SURGEONS=['Захаров К.И.','Гиниятов А.Р.','Иванов А.А.','Тищенков К.А.','Гюльмагомедов Л.Г.','Иванов М.А.'];
