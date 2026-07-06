@@ -293,7 +293,10 @@
 
   /* телефон: убрать горизонтальный скролл */
   @media(max-width:480px){
-    header{padding:12px 12px}
+    header{padding:10px 12px}
+    header .clinic,header .brandtext p{display:none}   /* компактная шапка: только название */
+    header .emblem{width:36px;height:36px;font-size:9.5px;box-shadow:0 0 0 2px var(--gold)}
+    header h1{font-size:15px}
     .headact{flex:1 1 100%;flex-wrap:wrap;justify-content:flex-start}
     details.acc .acc-body{overflow-x:auto}  /* широкие таблицы прокручиваются внутри, не растягивая страницу */
     .wrap{padding:12px 10px 40px}
@@ -690,7 +693,7 @@ function surgeonPresent(id,on){ const g=surgeonList.find(x=>x.id===id); if(!g) r
 
 /* ---------- быстрый план: стартовый экран-калькулятор ---------- */
 function openWizard(){ const w=$('wizard'); if(!w) return; w.style.display='flex'; render(); }
-function closeWizard(){ const w=$('wizard'); if(w) w.style.display='none'; }
+function closeWizard(){ const w=$('wizard'); if(w) w.style.display='none'; try{ localStorage.setItem('arthroWizSkip1', curDay); }catch(e){} }
 function wizDate(v){ if(v) gotoDay(v); }
 function wizStep(id,d){
   const el=$(id); if(!el) return;
@@ -711,7 +714,12 @@ function renderWizard(s, r){
   $('wizTablesNote').textContent = s.tables>s.inv.towers ? `реально работает ${N} — больше не позволяют стойки (${Math.round(s.inv.towers)} шт.)` : '';
   $('wizSurg').innerHTML = surgeonList.map((g,i)=>`<button class="wchip${g.off?'':' on'}" onclick="wizSurgToggle('${g.id}')">${escHtml(surgeonName(g,i))}</button>`).join('')
     || '<span class="note" style="margin:0">хирургов нет — добавьте в «Ресурсы и хирурги»</span>';
-  $('wizOps').innerHTML = TYPES.map(t=>`<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizStep('m_${t}',-1)">−</button><b>${Math.round(num('m_'+t))}</b><button onclick="wizStep('m_${t}',1)">+</button></div></div>`).join('');
+  // поимённый режим: расчёт идёт по списку пациентов — счётчики скрываем, чтобы цифры не расходились
+  $('wizOps').innerHTML = useCases
+    ? `<div class="note" style="margin:0 0 8px">Включён <b>поимённый список пациентов</b> (${caseList.length}) — расчёт ниже идёт по нему. Список редактируется в полном экране, в блоке «Что оперирую сегодня».</div>`
+      + (caseList.length?`<div class="note" style="margin:0 0 8px">${caseList.map((c,i)=>`${i+1}. ${escHtml(caseLabel(c))}`).join(' · ')}</div>`:'')
+      + `<button class="btn sm" onclick="toggleCases(false);const c=$('use_cases');if(c)c.checked=false;">Планировать числами (список сохранится)</button>`
+    : TYPES.map(t=>`<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizStep('m_${t}',-1)">−</button><b>${Math.round(num('m_'+t))}</b><button onclick="wizStep('m_${t}',1)">+</button></div></div>`).join('');
   // живой результат: сколько влезает, во сколько закончим, очередь по столам
   const total=r.sched.length, rej=Object.values(r.rejected).reduce((a,b)=>a+b,0);
   const mk=r.sched.reduce((m,o)=>Math.max(m,o.end),0);
@@ -928,7 +936,9 @@ function renderDone(s){
   $('doneChips').innerHTML=chips;
   if(implEditId && !doneLog.some(d=>d.id===implEditId)) closeImplants(true);
   $('doneClearRow').style.display=doneLog.length?'flex':'none';
-  $('doneNote').innerHTML = useDoneLog
+  $('doneNote').innerHTML = (useDoneLog && !isTodayPlan())
+    ? `<b style="color:var(--warn)">Выбранный день — не сегодня.</b> Режим остатка дня работает только на сегодняшней дате, поэтому этот день считается целиком с 08:00. Галочка и журнал сохранятся.`
+    : useDoneLog
     ? `Режим остатка дня <b style="color:var(--ok)">включён</b>. Новые операции планируются с <b>${fmtTime(Math.max(0,s.nowFloor))}</b>${doneLog.length?`, учтено сделано: <b>${doneLog.length}</b>`:''}. Наборы из живого таймера стерилизации (ниже) учитываются автоматически.`
     : `Выключено — считается весь день с 08:00. Включите, чтобы спланировать только остаток дня (с учётом уже сделанного и наборов в стерилизации).`;
 }
@@ -1156,6 +1166,8 @@ function freeStart(intervals, lower, occ){
   return t;
 }
 
+function todayISO(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
+function isTodayPlan(){ const d=$('p_date'); return !d || !d.value || d.value===todayISO(); }
 let prevDayDef=null;
 function readState(){
   const tables=Math.max(1, Math.round(num('p_tables')));
@@ -1175,19 +1187,20 @@ function readState(){
   // агрегатные таймеры (шейверы/оптики, кнопка «В стерилизацию») — времена готовности в минутах от 08:00
   const aggReadyMin={optic:[],shaver:[]};
   for(const t of sterTimers){ if(aggReadyMin[t.key] && t.end>nowReal) aggReadyMin[t.key].push(Math.max(0, wallNow + (t.end-nowReal)/60000)); }
-  const floor = useDoneLog ? Math.max(0, wallNow) : 0;
+  const liveDay = useDoneLog && isTodayPlan();   // «остаток дня» и живые таймеры имеют смысл только на сегодняшней дате
+  const floor = liveDay ? Math.max(0, wallNow) : 0;
   return {
     tables,
     day: horizon,
     dayDef,
     turnover: num('p_turnover'),
     tableWin: win,
-    useDoneLog,
+    useDoneLog: liveDay,
     doneLog: doneLog.slice(),
     nowFloor: floor,
     wallNow,
-    setReadyMin: useDoneLog?setReadyMin:{},
-    aggReadyMin: useDoneLog?aggReadyMin:{optic:[],shaver:[]},
+    setReadyMin: liveDay?setReadyMin:{},
+    aggReadyMin: liveDay?aggReadyMin:{optic:[],shaver:[]},
     ster: num('p_ster'),
     blocks: manualBlocks.slice(),
     dur: {bankart:num('d_bankart'),cuff:num('d_cuff'),acl:num('d_acl'),meniscus:num('d_meniscus'),latarjet:num('d_latarjet')},
@@ -1589,7 +1602,8 @@ function render(){
   if(total===0){
     if(N===0) bn='<b style="color:var(--bad)">Нет операционных столов.</b> Добавьте стойки/столы в блоке «Ресурсы и хирурги» и «Столы и время».';
     else if(s.useDoneLog && s.nowFloor>=s.day) bn=`<b style="color:var(--warn)">Рабочий день уже закончился.</b> Сейчас ${fmtTime(s.nowFloor)}, а день — до ${fmtTime(s.day)}. Увеличьте окна столов или выключите «остаток дня».`;
-    else if(plannedN>0) bn=`<b style="color:var(--bad)">Ничего не помещается.</b> Ограничивает: ${la.maxName}. Проверьте окна столов, блокировки${s.useDoneLog?' и время «сейчас»':''}.`;
+    else if(plannedN>0){ const tb=Object.entries(r.blame).sort((a,b)=>b[1]-a[1])[0];
+      bn=`<b style="color:var(--bad)">Ничего не помещается.</b> Ограничивает: ${tb?tb[0]:la.maxName}. Проверьте окна столов, блокировки${s.useDoneLog?' и время «сейчас»':''}.`; }
     else if(useCases) bn='Добавьте пациентов кнопкой «+ Добавить пациента» в блоке «Что оперирую сегодня».';
     else bn='Задайте, что оперируете, в блоке «Что оперирую сегодня» — или нажмите «Максимум в этих пропорциях».';
   }
@@ -1624,7 +1638,7 @@ function render(){
     drawSched = r.sched.map((o,i)=>Object.assign({_mid:'m'+i, _name:(useCasesNow&&caseList[o.oidx])?caseLabel(caseList[o.oidx]):null}, o));
     lastAutoSched = drawSched;
     lastPlan={sched:r.sched, s, useCases:useCasesNow};   // срезы — по АВТО-расписанию
-    $('schedMode').innerHTML = `<span class="muted">Совет: операции можно перетаскивать мышью — поменять стол и сдвинуть время прямо на ленте.</span>`;
+    $('schedMode').innerHTML = `<span class="muted">Совет: операции можно перетаскивать ${matchMedia('(pointer:coarse)').matches?'пальцем':'мышью'} — поменять стол и сдвинуть время прямо на ленте.</span>`;
   }
   drawGantt(s, drawSched, !!manualOps, conf);
   if(curSliceRole && $('sliceActions') && $('sliceActions').style.display==='flex') showSlice(curSliceRole);   // обновить показанный срез под текущий план
@@ -1650,6 +1664,7 @@ function bumpAndCount(s, name, order){
 }
 /* ---------- ручное расписание: перетаскивание операций ---------- */
 let lastAutoSched=[];   // последнее авто-расписание (для входа в ручной режим)
+let lastGanttDay=null;  // масштаб последней отрисовки ленты (на телефоне короче полного дня)
 let drag=null;
 function enterManual(){ manualOps=(lastAutoSched||[]).map((o,i)=>({id:o._mid||('m'+i), type:o.type, tower:o.tower, start:o.start, name:o._name||null, label:o.label, color:o.color, sets:o.sets, shaver:o.shaver, dur:o.dur, anes:o.anes, anesMode:o.anesMode, skillType:o.skillType})); }
 function exitManual(){ manualOps=null; render(); }
@@ -1703,7 +1718,7 @@ function setupGanttDrag(){
     const op=e.target.closest('.op'); if(!op || op.classList.contains('donep') || op.getAttribute('data-mid')==null) return;
     const track=op.parentElement, st=readState();
     drag={ el:op, mid:op.getAttribute('data-mid'), startX:e.clientX, startY:e.clientY, moved:false,
-           trackW:(track.getBoundingClientRect().width||track.clientWidth||0), day:st.day, lanes:lanesGeom(), origTower:0, origStart:0 };
+           trackW:(track.getBoundingClientRect().width||track.clientWidth||0), day:(lastGanttDay||st.day), lanes:lanesGeom(), origTower:0, origStart:0 };
     e.preventDefault();
   });
   window.addEventListener('pointermove', e=>{
@@ -1734,7 +1749,17 @@ function setupGanttDrag(){
 }
 function drawGantt(s, sched, manual, conf){
   conf=conf||{};
-  const g=$('gantt'), day=s.day, lanes=Math.max(1,stationCount(s));
+  const g=$('gantt'), lanes=Math.max(1,stationCount(s));
+  // на узком экране масштабируем ленту до конца последней операции (+ час до круглого) — иначе блоки сжаты и нечитаемы
+  let day=s.day;
+  if(window.innerWidth<700){
+    const lastEnd=Math.max(
+      sched.reduce((m,o)=>Math.max(m,o.end),0),
+      (s.useDoneLog?(s.doneLog||[]):[]).reduce((m,d)=>Math.max(m,d.end),0),
+      s.useDoneLog?s.nowFloor:0);
+    if(lastEnd>0) day=Math.min(s.day, Math.max(120, Math.ceil((lastEnd+60)/60)*60));
+  }
+  lastGanttDay=day;   // фактический масштаб ленты — для пересчёта пикселей во время при перетаскивании
   let axis='<div class="axis">';
   for(let m=0;m<=day;m+=60) axis+=`<span class="tick" style="left:${m/day*100}%">${fmtTime(m)}</span>`;
   if(s.useDoneLog && s.nowFloor>0 && s.nowFloor<=day) axis+=`<span class="tick nowtick" style="left:${s.nowFloor/day*100}%">▼${fmtTime(s.nowFloor)}</span>`;
@@ -2056,17 +2081,23 @@ document.addEventListener('input',e=>{ if(manualOps && !(e.target && MANUAL_KEEP
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(renderSter,1000);
 loadSettings();
-(function(){ const d=$('p_date'); if(d && !d.value){ const t=new Date(); d.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); } })();
-curDay=$('p_date')?$('p_date').value:'';
-if(curDay && dayStore[curDay]) applyDay(dayStore[curDay]);   // данные открытого дня — из недельного хранилища
+// приложение всегда открывается на СЕГОДНЯ: вчерашний план сохраняется под своей датой в неделе
+(function(){
+  const d=$('p_date'), t=todayISO();
+  curDay=(d&&d.value)||t; if(d) d.value=curDay;
+  if(dayStore[curDay]) applyDay(dayStore[curDay]);   // данные открытого дня — из недельного хранилища
+  if(curDay!==t) gotoDay(t);                          // ушедший день уезжает в историю, открываем сегодняшний
+})();
 renderPresets();
 render();
 setupGanttDrag();
-// пустой день → сразу быстрый план (стартовый экран), особенно удобно с телефона
+// пустой день → сразу быстрый план (стартовый экран), особенно удобно с телефона;
+// «Пропустить» запоминается: на этот день мастер сам больше не всплывает
 (function(){
   const planned = useCases ? caseList.length
     : TYPES.reduce((a,t)=>a+Math.max(0,Math.round(num('m_'+t))),0) + customList.reduce((a,c)=>a+Math.max(0,Math.round(c.count||0)),0);
-  if(planned===0 && !doneLog.length && !manualBlocks.length) openWizard();
+  let skipped=''; try{ skipped=localStorage.getItem('arthroWizSkip1')||''; }catch(e){}
+  if(planned===0 && !doneLog.length && !manualBlocks.length && skipped!==curDay) openWizard();
 })();
 </script>
 </body>
