@@ -368,7 +368,7 @@
       <div id="wizOps"></div>
       <div class="blkrow" id="wizCustomAdd" style="margin-top:10px">
         <input type="text" class="cname" id="wizc_name" placeholder="Своя операция — название" style="flex:1 1 140px;min-width:120px" onkeydown="if(event.key==='Enter')wizAddCustom()">
-        <select class="blk" id="wizc_set" title="какой набор нужен"><option value="shoulder">плечо</option><option value="acl" selected>ПКС</option><option value="meniscus">мениск</option><option value="latarjet">Латарже</option></select>
+        <select class="blk" id="wizc_set" title="какой сустав"><option value="shoulder">Плечо</option><option value="knee" selected>Колено</option><option value="ankle">Голеностоп</option></select>
         <input type="number" class="cdur" id="wizc_dur" value="45" min="5" step="5" title="длительность, мин">
         <button class="btn sm primary" onclick="wizAddCustom()">+</button>
       </div>
@@ -717,7 +717,8 @@ function wizCustomStep(id,d){ const c=customList.find(x=>x.id===id); if(!c) retu
 function wizAddCustom(){
   const n=$('wizc_name').value.trim(); if(!n){ $('wizc_name').focus(); return; }
   const dur=Math.max(5,Math.round(parseFloat($('wizc_dur').value)||45));
-  customList.push({id:'u'+Date.now()+Math.random().toString(36).slice(2,5), label:n, setCat:$('wizc_set').value, dur, count:1});
+  const j=$('wizc_set').value;
+  customList.push({id:'u'+Date.now()+Math.random().toString(36).slice(2,5), label:n, joint:j, setCat:(JOINTS[j]||JOINTS.knee).cat, dur, count:1});
   $('wizc_name').value='';
   customRenderedIds=null; manualOps=null; saveSettings(); render();
 }
@@ -738,7 +739,7 @@ function renderWizard(s, r){
       + (caseList.length?`<div class="note" style="margin:0 0 8px">${caseList.map((c,i)=>`${i+1}. ${escHtml(caseLabel(c))}`).join(' · ')}</div>`:'')
       + `<button class="btn sm" onclick="toggleCases(false);const c=$('use_cases');if(c)c.checked=false;">Планировать числами (список сохранится)</button>`
     : TYPES.map(t=>`<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizStep('m_${t}',-1)">−</button><b>${Math.round(num('m_'+t))}</b><button onclick="wizStep('m_${t}',1)">+</button></div></div>`).join('')
-      + customList.map(c=>`<div class="wizoprow"><span class="dot" style="background:var(--${c.setCat||'acl'})"></span><span class="nm">${escHtml(c.label||'Операция')} <span class="muted" style="font-size:12px;white-space:nowrap">${Math.round(c.dur||45)} мин</span></span><div class="wizstep"><button onclick="wizCustomStep('${c.id}',-1)">−</button><b>${Math.max(0,Math.round(c.count||0))}</b><button onclick="wizCustomStep('${c.id}',1)">+</button></div><button class="wx" onclick="removeCustomOp('${c.id}')" title="убрать операцию из списка">×</button></div>`).join('');
+      + customList.map(c=>`<div class="wizoprow"><span class="dot" style="background:var(--${c.setCat||'acl'})"></span><span class="nm">${escHtml(c.label||'Операция')} <span class="muted" style="font-size:12px;white-space:nowrap">${Math.round(c.dur||45)} мин · ${JOINTS[jointOf(c)].label.toLowerCase()}</span></span><div class="wizstep"><button onclick="wizCustomStep('${c.id}',-1)">−</button><b>${Math.max(0,Math.round(c.count||0))}</b><button onclick="wizCustomStep('${c.id}',1)">+</button></div><button class="wx" onclick="removeCustomOp('${c.id}')" title="убрать операцию из списка">×</button></div>`).join('');
   const wca=$('wizCustomAdd'); if(wca) wca.style.display=useCases?'none':'flex';
   // живой результат: сколько влезает, во сколько закончим, очередь по столам
   const total=r.sched.length, rej=Object.values(r.rejected).reduce((a,b)=>a+b,0);
@@ -1262,20 +1263,30 @@ function buildOrder(mix){
 }
 
 /* ---------- свои (нешаблонные) операции в режиме чисел: название текстом + набор + длительность + сколько ---------- */
-let customList=[];   // [{id,label,setCat,dur,count}]
+let customList=[];   // [{id,label,joint,setCat,dur,count}]
+// свои операции задаются суставом; нужный набор приложение выбирает само
+const JOINTS={
+  shoulder:{label:'Плечо',     cat:'shoulder'},   // плечевой набор, анестезия параллельно в зале
+  knee:    {label:'Колено',    cat:'acl'},        // ПКС-набор (годен на всё коленное), спинальная на столе
+  ankle:   {label:'Голеностоп',cat:'acl'},        // тоже ПКС-набор, спинальная на столе
+};
+const jointOf=c=>(c.joint&&JOINTS[c.joint])?c.joint:((c.setCat==='shoulder'||c.setCat==='latarjet')?'shoulder':'knee');
 function sanitizeCustom(arr){
-  return arr.map(x=>({
-    id:x.id||('u'+Math.random().toString(36).slice(2,7)),
-    label:typeof x.label==='string'?x.label:'',
-    setCat:(['shoulder','acl','meniscus','latarjet'].indexOf(x.setCat)>=0?x.setCat:'acl'),
-    dur:(isFinite(+x.dur)&&+x.dur>0)?Math.round(+x.dur):45,
-    count:(isFinite(+x.count)&&+x.count>0)?Math.round(+x.count):0,
-  }));
+  return arr.map(x=>{
+    const j=(x.joint&&JOINTS[x.joint])?x.joint:((x.setCat==='shoulder'||x.setCat==='latarjet')?'shoulder':'knee');
+    return {
+      id:x.id||('u'+Math.random().toString(36).slice(2,7)),
+      label:typeof x.label==='string'?x.label:'',
+      joint:j, setCat:JOINTS[j].cat,
+      dur:(isFinite(+x.dur)&&+x.dur>0)?Math.round(+x.dur):45,
+      count:(isFinite(+x.count)&&+x.count>0)?Math.round(+x.count):0,
+    };
+  });
 }
 function customSpec(c){
-  const cat=c.setCat||'acl', par=(cat==='shoulder'||cat==='latarjet');
+  const j=jointOf(c), cat=JOINTS[j].cat, par=(j==='shoulder');
   return {type:'custom', _cid:c.id, skillType:SKILL_BY_CAT[cat], dur:(c.dur>0?+c.dur:45),
-    anes:par?15:(cat==='meniscus'?2:12), anesMode:par?'par':'room', sets:[cat], shaver:cat==='acl',
+    anes:par?15:12, anesMode:par?'par':'room', sets:[cat], shaver:cat==='acl',
     label:(c.label&&c.label.trim())||'Операция', color:'var(--'+cat+')'};
 }
 // полный порядок дня: шаблонные типы + свои операции, чередованием (как buildOrder)
@@ -1295,7 +1306,8 @@ function customSet(id,f,v){
   if(f==='dur') c.dur=(v===''||!isFinite(+v))?45:Math.max(5,Math.round(+v));
   else if(f==='count') c.count=(v===''||!isFinite(+v))?0:Math.max(0,Math.round(+v));
   else c[f]=v;
-  if(f==='setCat'){ const row=document.querySelector('#customOps .caserow[data-id="'+id+'"] .dot'); if(row) row.style.background='var(--'+(c.setCat||'acl')+')'; }
+  if(f==='joint'){ c.joint=(JOINTS[v]?v:'knee'); c.setCat=JOINTS[c.joint].cat; }
+  if(f==='joint'||f==='setCat'){ const row=document.querySelector('#customOps .caserow[data-id="'+id+'"] .dot'); if(row) row.style.background='var(--'+(c.setCat||'acl')+')'; }
   manualOps=null; /* перерисует глобальный input-слушатель */
 }
 let customRenderedIds=null;
@@ -1305,11 +1317,10 @@ function renderCustomOps(s, sched, order){
   if(ids!==customRenderedIds){
     customRenderedIds=ids;
     const esc=x=>(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
-    const pools=[['shoulder','плечо'],['acl','ПКС'],['meniscus','мениск'],['latarjet','Латарже']];
     host.innerHTML=customList.map(c=>`<div class="caserow" data-id="${c.id}">
       <span class="dot" style="background:var(--${c.setCat||'acl'})"></span>
       <input type="text" class="cname" placeholder="Название операции" value="${esc(c.label)}" oninput="customSet('${c.id}','label',this.value)">
-      <select class="blk" title="какой набор нужен" onchange="customSet('${c.id}','setCat',this.value);render()">${pools.map(([v,l])=>`<option value="${v}"${(c.setCat||'acl')===v?' selected':''}>${l}</option>`).join('')}</select>
+      <select class="blk" title="какой сустав" onchange="customSet('${c.id}','joint',this.value);render()">${Object.keys(JOINTS).map(v=>`<option value="${v}"${jointOf(c)===v?' selected':''}>${JOINTS[v].label}</option>`).join('')}</select>
       <input type="number" class="cdur" min="5" step="5" title="длительность, мин" value="${c.dur}" oninput="customSet('${c.id}','dur',this.value)">
       <span class="muted" style="font-size:12px">шт.</span>
       <input type="number" class="cdur" min="0" style="width:48px;flex-basis:48px" title="сколько таких сегодня" value="${c.count}" oninput="customSet('${c.id}','count',this.value)">
