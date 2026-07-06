@@ -11,6 +11,7 @@
     --txt:#2a2520; --muted:#7c7167; --accent:#a23c28; --gold:#b08a2e; --ok:#2f7d52;
     --warn:#c07a14; --bad:#c0392b;
     --bankart:#2a8f6c; --cuff:#bd8a1e; --acl:#e07a2e; --meniscus:#3173a6; --latarjet:#7a5bbf; --tool:#9a8f82;
+    --shoulder:#2a8f6c;   /* цвет категории наборов «плечо» — для своих операций */
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -122,6 +123,9 @@
   .wizres{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:12px 14px;margin-top:10px;font-size:14.5px}
   .wizres .q{font:12.5px/1.7 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;margin-top:8px;color:var(--txt);overflow-x:auto}
   .wizgo{width:100%;margin-top:12px;padding:14px;font-size:15.5px}
+  .wizoprow .wx{border:none;width:30px;height:30px;border-radius:8px;background:var(--line);color:var(--txt);cursor:pointer;font-size:14px;line-height:1;margin-left:4px;flex:0 0 auto}
+  .wizoprow .wx:hover{background:var(--bad);color:#fff}
+  #wizCustomAdd .cname,#wizCustomAdd .cdur,#wizCustomAdd select.blk{background:var(--panel2)}
   #wiz_date{font-size:15px;padding:9px 11px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
   .wizday{margin-left:10px;color:var(--muted);font-size:13.5px}
   /* списание имплантов */
@@ -362,6 +366,12 @@
     <div class="wizsec">
       <div class="wizlbl">4 · Какие операции</div>
       <div id="wizOps"></div>
+      <div class="blkrow" id="wizCustomAdd" style="margin-top:10px">
+        <input type="text" class="cname" id="wizc_name" placeholder="Своя операция — название" style="flex:1 1 140px;min-width:120px" onkeydown="if(event.key==='Enter')wizAddCustom()">
+        <select class="blk" id="wizc_set" title="какой набор нужен"><option value="shoulder">плечо</option><option value="acl" selected>ПКС</option><option value="meniscus">мениск</option><option value="latarjet">Латарже</option></select>
+        <input type="number" class="cdur" id="wizc_dur" value="45" min="5" step="5" title="длительность, мин">
+        <button class="btn sm primary" onclick="wizAddCustom()">+</button>
+      </div>
     </div>
     <div class="wizres" id="wizRes"></div>
     <button class="btn primary wizgo" onclick="closeWizard()">Готово — открыть полный план</button>
@@ -703,6 +713,14 @@ function wizStep(id,d){
   manualOps=null; saveSettings(); render();
 }
 function wizSurgToggle(id){ const g=surgeonList.find(x=>x.id===id); if(!g) return; g.off=!g.off; manualOps=null; surgRenderedIds=null; saveSettings(); render(); }
+function wizCustomStep(id,d){ const c=customList.find(x=>x.id===id); if(!c) return; c.count=Math.max(0,Math.round((c.count||0)+d)); customRenderedIds=null; manualOps=null; saveSettings(); render(); }
+function wizAddCustom(){
+  const n=$('wizc_name').value.trim(); if(!n){ $('wizc_name').focus(); return; }
+  const dur=Math.max(5,Math.round(parseFloat($('wizc_dur').value)||45));
+  customList.push({id:'u'+Date.now()+Math.random().toString(36).slice(2,5), label:n, setCat:$('wizc_set').value, dur, count:1});
+  $('wizc_name').value='';
+  customRenderedIds=null; manualOps=null; saveSettings(); render();
+}
 function renderWizard(s, r){
   const w=$('wizard'); if(!w || w.style.display==='none') return;
   const d=$('p_date'), wd=$('wiz_date');
@@ -719,7 +737,9 @@ function renderWizard(s, r){
     ? `<div class="note" style="margin:0 0 8px">Включён <b>поимённый список пациентов</b> (${caseList.length}) — расчёт ниже идёт по нему. Список редактируется в полном экране, в блоке «Что оперирую сегодня».</div>`
       + (caseList.length?`<div class="note" style="margin:0 0 8px">${caseList.map((c,i)=>`${i+1}. ${escHtml(caseLabel(c))}`).join(' · ')}</div>`:'')
       + `<button class="btn sm" onclick="toggleCases(false);const c=$('use_cases');if(c)c.checked=false;">Планировать числами (список сохранится)</button>`
-    : TYPES.map(t=>`<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizStep('m_${t}',-1)">−</button><b>${Math.round(num('m_'+t))}</b><button onclick="wizStep('m_${t}',1)">+</button></div></div>`).join('');
+    : TYPES.map(t=>`<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizStep('m_${t}',-1)">−</button><b>${Math.round(num('m_'+t))}</b><button onclick="wizStep('m_${t}',1)">+</button></div></div>`).join('')
+      + customList.map(c=>`<div class="wizoprow"><span class="dot" style="background:var(--${c.setCat||'acl'})"></span><span class="nm">${escHtml(c.label||'Операция')} <span class="muted" style="font-size:12px;white-space:nowrap">${Math.round(c.dur||45)} мин</span></span><div class="wizstep"><button onclick="wizCustomStep('${c.id}',-1)">−</button><b>${Math.max(0,Math.round(c.count||0))}</b><button onclick="wizCustomStep('${c.id}',1)">+</button></div><button class="wx" onclick="removeCustomOp('${c.id}')" title="убрать операцию из списка">×</button></div>`).join('');
+  const wca=$('wizCustomAdd'); if(wca) wca.style.display=useCases?'none':'flex';
   // живой результат: сколько влезает, во сколько закончим, очередь по столам
   const total=r.sched.length, rej=Object.values(r.rejected).reduce((a,b)=>a+b,0);
   const mk=r.sched.reduce((m,o)=>Math.max(m,o.end),0);
