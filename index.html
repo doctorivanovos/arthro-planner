@@ -703,7 +703,7 @@ function surgeonPresent(id,on){ const g=surgeonList.find(x=>x.id===id); if(!g) r
 
 /* ---------- быстрый план: стартовый экран-калькулятор ---------- */
 function openWizard(){ const w=$('wizard'); if(!w) return; w.style.display='flex'; render(); }
-function closeWizard(){ const w=$('wizard'); if(w) w.style.display='none'; try{ localStorage.setItem('arthroWizSkip1', curDay); }catch(e){} }
+function closeWizard(){ const w=$('wizard'); if(w) w.style.display='none'; try{ localStorage.setItem('arthroWizSkip1', todayISO()); }catch(e){} }
 function wizDate(v){ if(v) gotoDay(v); }
 function wizStep(id,d){
   const el=$(id); if(!el) return;
@@ -2122,13 +2122,12 @@ loadSettings();
 renderPresets();
 render();
 setupGanttDrag();
-// пустой день → сразу быстрый план (стартовый экран), особенно удобно с телефона;
-// «Пропустить» запоминается: на этот день мастер сам больше не всплывает
+// быстрый план — стартовый экран: всплывает при ПЕРВОМ заходе за день (даже если
+// пропорции унаследованы со вчера — утром их надо подтвердить); закрыли — до завтра сам не появится
 (function(){
-  const planned = useCases ? caseList.length
-    : TYPES.reduce((a,t)=>a+Math.max(0,Math.round(num('m_'+t))),0) + customList.reduce((a,c)=>a+Math.max(0,Math.round(c.count||0)),0);
-  let skipped=''; try{ skipped=localStorage.getItem('arthroWizSkip1')||''; }catch(e){}
-  if(planned===0 && !doneLog.length && !manualBlocks.length && skipped!==curDay) openWizard();
+  const t=todayISO();
+  let seen=''; try{ seen=localStorage.getItem('arthroWizSkip1')||''; }catch(e){}
+  if(seen!==t && curDay===t) openWizard();
 })();
 </script>
 </body>
