@@ -155,7 +155,7 @@
   #dayNamesWrap{margin-top:8px}
   .dnrow{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
   .dnrow .ord{width:20px;text-align:center;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
-  .dnrow .dnord{width:52px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 4px;font-size:14px;text-align:center;font-weight:600}
+  .dnrow .dnord{width:56px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 6px;font-size:14px;text-align:center;font-weight:600;cursor:pointer}
   .dnrow .dnord:focus{outline:none;border-color:var(--accent)}
   .dnrow .dntm{flex:0 0 auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums;min-width:96px}
   .dnrow .dnttl{flex:0 0 auto;font-size:13.5px;min-width:86px}
@@ -1856,7 +1856,7 @@ function renderDayNames(s, sched, order, uc){
   if(sig!==dayNamesSig){
     dayNamesSig=sig;
     host.innerHTML=rows.map((r,i)=>`<div class="dnrow">`
-      +`<input type="number" class="dnord" min="1" max="${rows.length}" value="${i+1}" title="номер в очереди — впишите новый, план перестроится" onchange="queueAssign('${r.slot}',this.value)">`
+      +`<select class="dnord" title="номер в очереди — выберите новый, план перестроится" onchange="queueAssign('${r.slot}',this.value)">${rows.map((_,n)=>`<option value="${n+1}"${n===i?' selected':''}>${n+1}</option>`).join('')}</select>`
       +`<span class="dot" style="background:${opColor(r.o)}"></span>`
       +`<span class="dntm">${fmtTime(r.o.start)} · стол ${r.o.tower+1}</span><span class="dnttl">${escHtml(opLabel(r.o))}</span>`
       +`<input type="text" class="cname" placeholder="фамилия" value="${escHtml((dayNames[r.key]&&dayNames[r.key][r.k])||'')}" oninput="dayNamesSet('${r.key}',${r.k},this.value)"></div>`).join('')
