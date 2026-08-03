@@ -151,6 +151,14 @@
   .implitem .x:hover{background:var(--bad);color:#fff}
   .implfree{margin-top:10px}
   .implfree summary{font-size:12.5px;color:var(--muted)}
+  /* пациенты дня под расписанием */
+  #dayNamesWrap{margin-top:8px}
+  .dnrow{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
+  .dnrow .ord{width:20px;text-align:center;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+  .dnrow .dntm{flex:0 0 auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums;min-width:96px}
+  .dnrow .dnttl{flex:0 0 auto;font-size:13.5px;min-width:86px}
+  .dnrow .cname{flex:1;min-width:110px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 10px;font-size:14px}
+  .dnrow .cname:focus{outline:none;border-color:var(--accent)}
   .chip .implbtn{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:1px 8px;font-size:11px;color:var(--muted)}
   .chip .implbtn:hover{border-color:var(--accent);color:var(--accent)}
   .chip .implbtn.has{border-color:var(--gold);color:#8a6a16;font-weight:600}
@@ -425,6 +433,10 @@
     <div class="gantt" id="gantt"></div>
     <div class="legend" id="legend"></div>
     <div class="lanesum" id="laneSummary"></div>
+    <details class="noprint" id="dayNamesWrap"><summary>Пациенты дня — номера и фамилии</summary>
+      <div id="dayNamesRows"></div>
+      <div class="note">Фамилия привязывается к операции и сразу видна на ленте, в срезах для бригады и подставляется при списании имплантов.</div>
+    </details>
     <details><summary>Как читать диаграмму</summary>
       <div class="note">Штриховка в начале блока = анестезия на столе (стол занят: ПКС — спинальная, мениск — в/в). Значок <b>∥</b> на блоке = анестезия шла параллельно в отдельном зале, стол ею не занят (плечевые: Латарже, Банкарт, манжета). После операции набор, оптика и шейвер уходят на стерилизацию 1,5 ч. Тёмная косая штриховка по краям дорожки = стол ещё/уже не работает. Линия и метка «сейчас» появляются в режиме остатка дня.</div>
     </details>
@@ -1054,7 +1066,7 @@ try{ const lim=new Date(); lim.setDate(lim.getDate()-90); const limStr=lim.toISO
   for(const k in dayStore){ if(k<limStr) delete dayStore[k]; } }catch(e){}
 function daySnapshot(){
   const mix={}; TYPES.forEach(t=>{const el=$('m_'+t); mix[t]=el?el.value:0;});
-  return {mix, cases:caseList, useCases, doneLog, useDoneLog, blocks:manualBlocks, custom:customList};
+  return {mix, cases:caseList, useCases, doneLog, useDoneLog, blocks:manualBlocks, custom:customList, names:dayNames};
 }
 function applyDay(d){
   d=d||{};
@@ -1063,6 +1075,7 @@ function applyDay(d){
   doneLog=Array.isArray(d.doneLog)?d.doneLog:[]; useDoneLog=!!d.useDoneLog; const cd=$('use_done'); if(cd) cd.checked=useDoneLog;
   manualBlocks=Array.isArray(d.blocks)?d.blocks:[];
   customList=Array.isArray(d.custom)?sanitizeCustom(d.custom):[]; customRenderedIds=null;
+  dayNames=sanitizeNames(d.names); dayNamesSig=null;
   manualOps=null;
 }
 function switchDay(v){
@@ -1099,7 +1112,7 @@ const PERSIST_IDS=['inv_towers','inv_optics','inv_shavers','set_shoulder','set_a
 function saveSettings(){
   try{
     const f={}; PERSIST_IDS.forEach(id=>{const el=$(id); if(el) f[id]=el.value;});
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({fields:f, tableWin, blocks:manualBlocks, doneLog, useDoneLog, cases:caseList, useCases, surgeons:surgeonList, custom:customList}));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({fields:f, tableWin, blocks:manualBlocks, doneLog, useDoneLog, cases:caseList, useCases, surgeons:surgeonList, custom:customList, names:dayNames}));
     if(curDay){ dayStore[curDay]=daySnapshot(); localStorage.setItem(DAYS_KEY, JSON.stringify(dayStore)); }
   }catch(e){
     if(!saveSettings._warned){ saveSettings._warned=true;
@@ -1121,6 +1134,7 @@ function loadSettings(){
     const cc=$('use_cases'); if(cc) cc.checked=useCases;
     if(Array.isArray(o.surgeons)) surgeonList=sanitizeSurgeons(o.surgeons);
     if(Array.isArray(o.custom)) customList=sanitizeCustom(o.custom);
+    if(o.names) dayNames=sanitizeNames(o.names);
   }catch(e){}
   if(!surgeonList.length){
     // первый запуск: состав отделения по умолчанию (навыки — все операции; снимите лишние галочки)
@@ -1140,7 +1154,7 @@ function newDay(){
   if((caseList.length||doneLog.length||manualOps) && !confirm('Начать новый день? Список пациентов, журнал остатка дня, разовые блокировки и таймеры стерилизации очистятся. Настройки отделения и шаблоны останутся.')) return;
   caseList=[]; useCases=false; const c=$('use_cases'); if(c)c.checked=false;
   doneLog=[]; useDoneLog=false; const c2=$('use_done'); if(c2)c2.checked=false;
-  manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null; customList=[]; customRenderedIds=null;
+  manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null; customList=[]; customRenderedIds=null; dayNames={}; dayNamesSig=null;
   try{ sterTimers=[]; setSterMap={}; saveSter(); }catch(e){}
   const sa=$('sliceActions'); if(sa)sa.style.display='none'; const so=$('sliceOut'); if(so)so.textContent='';
   const d=$('p_date'); if(d){ const t=new Date(); d.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); curDay=d.value; }
@@ -1746,13 +1760,23 @@ function render(){
       : `<b style="color:var(--ok)">✓ Ручное расписание корректно.</b> ${manualOps.length} операц., конец в <b>${fmtTime(mEnd)}</b>.`;
     $('schedMode').innerHTML = `<span class="manbadge">Ручной режим</span> вы перетащили расписание · <button class="btn sm" onclick="exitManual()">↻ Вернуть авто-расписание</button>`;
   } else {
-    drawSched = r.sched.map((o,i)=>Object.assign({_mid:'m'+i, _name:(useCasesNow&&caseList[o.oidx])?caseLabel(caseList[o.oidx]):null}, o));
+    // фамилии на операциях: поимённый режим — из списка пациентов; числовой — из «Пациентов дня» (k-я операция типа)
+    const occCnt={};
+    r.sched.slice().sort((a,b)=>a.oidx-b.oidx).forEach(o=>{
+      const el=order[o.oidx]; const key=(el&&el._cid)||o.type;
+      const k=(occCnt[key]=(occCnt[key]||0)); occCnt[key]++;
+      o._nkey=key; o._nocc=k;
+      o._name = useCasesNow ? (caseList[o.oidx]?caseLabel(caseList[o.oidx]):null)
+                            : ((dayNames[key]&&dayNames[key][k])||null);
+    });
+    drawSched = r.sched.map((o,i)=>Object.assign({_mid:'m'+i}, o));
     lastAutoSched = drawSched;
     lastPlan={sched:r.sched, s, useCases:useCasesNow};   // срезы — по АВТО-расписанию
     $('schedMode').innerHTML = `<span class="muted">Совет: операции можно перетаскивать ${matchMedia('(pointer:coarse)').matches?'пальцем':'мышью'} — поменять стол и сдвинуть время прямо на ленте.</span>`;
   }
   lastDrawSched=drawSched;   // для тап-меню операции на ленте
   drawGantt(s, drawSched, !!manualOps, conf);
+  renderDayNames(s, r.sched, order, useCasesNow);
   if(curSliceRole && $('sliceActions') && $('sliceActions').style.display==='flex') showSlice(curSliceRole);   // обновить показанный срез под текущий план
   drawCeilings(s);
   renderSter();
@@ -1777,6 +1801,41 @@ function bumpAndCount(s, name, order){
 let lastAutoSched=[];   // последнее авто-расписание (для входа в ручной режим)
 let lastGanttDay=null;  // масштаб последней отрисовки ленты (на телефоне короче полного дня)
 let lastDrawSched=[];   // операции, нарисованные на ленте (для тап-меню)
+
+/* ---------- пациенты дня: номер и фамилия на операциях числового режима ---------- */
+// привязка: фамилия закреплена за k-й операцией своего типа (или своей операции) —
+// при изменении количеств чужие фамилии не слетают
+let dayNames={};        // {bankart:['Иванов',...], acl:[...], <id своей операции>:[...]}
+let dayNamesSig=null;
+function sanitizeNames(o){
+  const r={}; if(!o||typeof o!=='object') return r;
+  for(const k in o){ if(Array.isArray(o[k])) r[k]=o[k].map(x=>typeof x==='string'?x:''); }
+  return r;
+}
+function dayNamesSet(key,k,v){ if(!dayNames[key]) dayNames[key]=[]; dayNames[key][k]=v; /* перерисует глобальный input-слушатель */ }
+function renderDayNames(s, sched, order, uc){
+  const wrap=$('dayNamesWrap'), host=$('dayNamesRows'); if(!wrap||!host) return;
+  if(uc){ wrap.style.display='none'; return; }
+  wrap.style.display='';
+  const occ={};
+  const rows=sched.slice().sort((a,b)=>a.oidx-b.oidx).map(o=>{
+    const el=order&&order[o.oidx]; const key=(el&&el._cid)||o.type;
+    const k=(occ[key]=(occ[key]||0)); occ[key]++;
+    return {key,k,o};
+  }).sort((a,b)=>a.o.start-b.o.start||a.o.tower-b.o.tower);
+  const sig=rows.map(r=>r.key+':'+r.k).join('|');
+  if(sig!==dayNamesSig){
+    dayNamesSig=sig;
+    host.innerHTML=rows.map((r,i)=>`<div class="dnrow"><span class="ord">${i+1}</span><span class="dot" style="background:${opColor(r.o)}"></span>`
+      +`<span class="dntm">${fmtTime(r.o.start)} · стол ${r.o.tower+1}</span><span class="dnttl">${escHtml(opLabel(r.o))}</span>`
+      +`<input type="text" class="cname" placeholder="фамилия" value="${escHtml((dayNames[r.key]&&dayNames[r.key][r.k])||'')}" oninput="dayNamesSet('${r.key}',${r.k},this.value)"></div>`).join('')
+      ||'<div class="note">операций в плане нет — задайте их выше</div>';
+  } else {
+    // состав плана не менялся — обновляем только времена, фокус в поле фамилии сохраняется
+    const tms=host.querySelectorAll('.dntm');
+    rows.forEach((r,i)=>{ if(tms[i]) tms[i].textContent=`${fmtTime(r.o.start)} · стол ${r.o.tower+1}`; });
+  }
+}
 
 /* ---------- тап по операции на ленте: отметить выполненной и списать импланты ---------- */
 function openOpMenu(mid){
@@ -2118,7 +2177,7 @@ function renderSter(){
 // изменение настроек/плана сбрасывает ручную раскладку (иначе она устаревает: геометрия, фантомные столы);
 // поля-формы, которые сами по себе план не меняют (дата, заготовки журнала/блокировок), раскладку не трогают
 const MANUAL_KEEP_IDS=['p_date','done_type','done_end','done_tower','blk_station','blk_from','blk_to','preset_sel','impl_pat','impl_name','impl_qty'];
-document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor')))){ manualOps=null; } render(); });
+document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor') || e.target.closest('#dayNamesRows')))){ manualOps=null; } render(); });
 // колесо мыши над числовым полем не должно менять значение, но и не выбивать фокус при прокрутке страницы
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(renderSter,1000);
