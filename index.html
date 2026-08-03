@@ -81,8 +81,6 @@
       box-shadow:inset 0 0 0 1px rgba(231,76,60,.45)}
   .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--muted)}
   .note{font-size:12px;color:var(--muted);margin-top:10px}
-  .scenario{font-size:13px;background:var(--panel2);border-left:3px solid var(--warn);
-       padding:8px 12px;border-radius:0 8px 8px 0;margin-top:6px;min-height:20px}
   .muted{color:var(--muted)}
   details{margin-top:10px} summary{cursor:pointer;color:var(--accent);font-size:13px}
   /* sterilization tracker */
@@ -170,24 +168,6 @@
   .setchip.run{border-color:var(--warn)} .setchip.run .st{color:var(--warn)}
   .setchip.done{border-color:var(--ok)} .setchip.done .st{color:var(--ok)}
   /* manual ordered plan */
-  .feas{font-size:13px;padding:9px 12px;border-radius:8px;margin-top:12px;border-left:3px solid var(--line);background:var(--panel2)}
-  .feas.ok{border-color:var(--ok)} .feas.ok b{color:var(--ok)}
-  .feas.bad{border-color:var(--bad)} .feas.bad b{color:var(--bad)}
-  .feas.idle{color:var(--muted)}
-  .seqlist{margin-top:10px;display:flex;flex-direction:column;gap:5px}
-  .seqitem{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);
-        border-radius:8px;padding:5px 8px;font-size:13px}
-  .seqitem.fit{border-left:3px solid var(--ok)} .seqitem.nofit{border-left:3px solid var(--bad);opacity:.9}
-  .seqitem .ord{width:20px;text-align:center;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
-  .seqitem .nm{font-weight:600;white-space:nowrap}
-  .seqitem .status{flex:1;text-align:right;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
-  .seqitem .status .ok-s{color:var(--ok)} .seqitem .status .bad-s{color:var(--bad)}
-  .seqbtns{display:flex;gap:3px}
-  .seqbtns button{cursor:pointer;border:none;width:20px;height:20px;border-radius:5px;background:var(--line);
-        color:var(--txt);font-size:12px;line-height:1;padding:0}
-  .seqbtns .mv:hover{background:var(--accent);color:#fff}
-  .seqbtns button:disabled{opacity:.3;cursor:default}
-  .seqbtns .x:hover{background:var(--bad);color:#fff}
   /* анестезия: режим (в зале ∥ / на столе) + параллельный блок на диаграмме */
   .row.arow .actl{display:flex;align-items:center;gap:6px}
   select.amode{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:5px 6px;font-size:12px;cursor:pointer}
@@ -499,23 +479,6 @@
     </div>
   </details>
 
-  <!-- ПОРЯДОК -->
-  <details class="acc">
-    <summary>Порядок операций<span class="acc-hint">во сколько закончу, всё ли влезает</span><span class="chev">▾</span></summary>
-    <div class="acc-body" id="seqCard">
-      <div class="btnrow" id="seqAddRow"></div>
-      <div class="btnrow">
-        <button class="btn sm" onclick="seqFromPlan()">↓ Взять из плана сверху</button>
-        <button class="btn sm" onclick="planFromSeq()" title="Перенести состав этого порядка в «Что оперирую» вверху">↑ Состав в план</button>
-        <button class="btn sm primary" onclick="seqBest()">Лучший порядок</button>
-        <button class="btn sm" onclick="seqClear()">Очистить</button>
-      </div>
-      <div class="feas idle" id="seqFeas"></div>
-      <div class="seqlist" id="seqList"></div>
-      <div id="seqResult"></div>
-      <div class="note">Считается <b>отдельно</b> от «Что оперирую» сверху: тут вы задаёте конкретный порядок и проверяете его. «↓ Взять из плана» — подтянуть состав сверху; «↑ Состав в план» — наоборот. «Реализуем» — весь список влезает в этом порядке. Если нет — жмите «Лучший порядок».</div>
-    </div>
-  </details>
 
   <!-- ОСТАТОК ДНЯ -->
   <details class="acc">
@@ -624,15 +587,7 @@
       <div class="btnrow"><button class="btn sm primary" onclick="addSurgeon()">+ Добавить хирурга</button></div>
       <div class="note" id="surgNote"></div>
       <div class="btnrow"><button class="btn" onclick="resetInv()">Сбросить инвентарь</button><button class="btn warn" onclick="resetAll()">Сбросить всё к заводским</button></div>
-      <h3>Сценарии «что сломается»</h3>
-      <div class="btnrow">
-        <button class="btn warn sm" onclick="scenario('tower')">−1 стойка</button>
-        <button class="btn warn sm" onclick="scenario('shaver')">−5 шейверов</button>
-        <button class="btn warn sm" onclick="scenario('acl')">−2 набора ПКС</button>
-        <button class="btn warn sm" onclick="scenario('shoulder')">−1 набор плечо</button>
-        <button class="btn warn sm" onclick="scenario('optics')">оптики → 5</button>
-      </div>
-      <div class="scenario" id="scenarioBox">Меняйте любые числа — расчёт обновляется мгновенно.</div>
+      <div class="note">Что-то сломалось или потерялось — просто уменьшите число выше, расчёт обновится мгновенно.</div>
     </div>
   </details>
 
@@ -1053,7 +1008,7 @@ function sliceImpl(){
     if(!(d.implants&&d.implants.length)) out+='    —\n';
   });
   const keys=Object.keys(tot);
-  if(keys.length){ out+='\nИтого за день:\n'; keys.sort((a,b)=>a.localeCompare(b,'ru')).forEach(k=>{ out+=`    ${k} × ${tot[k]}\n`; }); }
+  if(keys.length){ out+='\nИтого за день:\n'; keys.sort((a,b)=>tot[b]-tot[a] || a.localeCompare(b,'ru')).forEach(k=>{ out+=`    ${k} × ${tot[k]}\n`; }); }
   return out;
 }
 function renderDone(s){
@@ -1088,7 +1043,7 @@ try{ const lim=new Date(); lim.setDate(lim.getDate()-90); const limStr=lim.toISO
   for(const k in dayStore){ if(k<limStr) delete dayStore[k]; } }catch(e){}
 function daySnapshot(){
   const mix={}; TYPES.forEach(t=>{const el=$('m_'+t); mix[t]=el?el.value:0;});
-  return {mix, cases:caseList, useCases, doneLog, useDoneLog, blocks:manualBlocks, seq:opSequence.slice(), custom:customList};
+  return {mix, cases:caseList, useCases, doneLog, useDoneLog, blocks:manualBlocks, custom:customList};
 }
 function applyDay(d){
   d=d||{};
@@ -1096,7 +1051,6 @@ function applyDay(d){
   caseList=Array.isArray(d.cases)?d.cases:[]; useCases=!!d.useCases; const cc=$('use_cases'); if(cc) cc.checked=useCases;
   doneLog=Array.isArray(d.doneLog)?d.doneLog:[]; useDoneLog=!!d.useDoneLog; const cd=$('use_done'); if(cd) cd.checked=useDoneLog;
   manualBlocks=Array.isArray(d.blocks)?d.blocks:[];
-  opSequence=Array.isArray(d.seq)?d.seq.filter(t=>OPS[t]):[];
   customList=Array.isArray(d.custom)?sanitizeCustom(d.custom):[]; customRenderedIds=null;
   manualOps=null;
 }
@@ -1175,7 +1129,7 @@ function newDay(){
   if((caseList.length||doneLog.length||manualOps) && !confirm('Начать новый день? Список пациентов, журнал остатка дня, разовые блокировки и таймеры стерилизации очистятся. Настройки отделения и шаблоны останутся.')) return;
   caseList=[]; useCases=false; const c=$('use_cases'); if(c)c.checked=false;
   doneLog=[]; useDoneLog=false; const c2=$('use_done'); if(c2)c2.checked=false;
-  manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null; opSequence=[]; customList=[]; customRenderedIds=null;
+  manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null; customList=[]; customRenderedIds=null;
   try{ sterTimers=[]; setSterMap={}; saveSter(); }catch(e){}
   const sa=$('sliceActions'); if(sa)sa.style.display='none'; const so=$('sliceOut'); if(so)so.textContent='';
   const d=$('p_date'); if(d){ const t=new Date(); d.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); curDay=d.value; }
@@ -1793,7 +1747,6 @@ function render(){
   renderBlocks(s);
   renderTableWindows(s);
   renderDone(s);
-  renderSeq();
   renderWeek();
   renderWizard(s, r);
   const ph=$('printHead'); if(ph){ const ds=planDateStr(); ph.textContent=(ds?ds:'Операционный день')+' · операций: '+$('kpi_total').textContent+', до '+$('kpi_makespan').textContent; }
@@ -1987,16 +1940,7 @@ function resetInv(){
   $('inv_towers').value=3; $('inv_optics').value=17; $('inv_shavers').value=15;
   $('set_shoulder').value=4; $('set_acl').value=5; $('set_meniscus').value=2; $('set_latarjet').value=2;
   $('p_tables').value=3;
-  $('scenarioBox').textContent='Инвентарь восстановлен до полного.'; render();
-}
-function scenario(kind){
-  manualOps=null;
-  const map={tower:['inv_towers',-1,'Сломалась 1 стойка → '],shaver:['inv_shavers',-5,'Вышло из строя 5 шейверов → '],
-    acl:['set_acl',-2,'Потеряно 2 набора ПКС → '],shoulder:['set_shoulder',-1,'Потерян 1 набор плечо → ']};
-  if(kind==='optics'){$('inv_optics').value=5;$('scenarioBox').textContent='Осталось 5 оптик → пересчёт ниже.';render();return;}
-  const [id,delta,msg]=map[kind];
-  $(id).value=Math.max(0,(parseFloat($(id).value)||0)+delta);
-  $('scenarioBox').textContent=msg+'пересчёт ниже.'; render();
+  render();
 }
 
 /* ---------- чёрный лебедь: UI блокировок ---------- */
@@ -2126,98 +2070,6 @@ function renderSter(){
   if(host._html!==html){ host._html=html; host.innerHTML=html; }
 }
 
-/* ---------- ручной порядок операций + оптимизатор ---------- */
-let opSequence=[];   // массив типов в выбранном пользователем порядке
-function seqAdd(type){ opSequence.push(type); renderSeq(); }
-function seqRemoveAt(i){ opSequence.splice(i,1); renderSeq(); }
-function seqMoveUp(i){ if(i>0){[opSequence[i-1],opSequence[i]]=[opSequence[i],opSequence[i-1]];} renderSeq(); }
-function seqMoveDown(i){ if(i<opSequence.length-1){[opSequence[i+1],opSequence[i]]=[opSequence[i],opSequence[i+1]];} renderSeq(); }
-function seqClear(){ opSequence=[]; renderSeq(); }
-function planToOps(s){ const a=[]; TYPES.forEach(t=>{for(let i=0;i<Math.round(s.mix[t]);i++)a.push(t);}); return a; }
-function seqFromPlan(){ opSequence=planToOps(readState()); renderSeq(); }
-function planFromSeq(){ const c={}; TYPES.forEach(t=>c[t]=0); opSequence.forEach(t=>{c[t]=(c[t]||0)+1;}); TYPES.forEach(t=>$('m_'+t).value=c[t]); render(); }
-
-// перебор порядков того же набора операций: максимум влезает, при равенстве — раньше заканчиваем
-function bestOrder(s, ops){
-  if(!ops.length) return [];
-  const w=t=>((s.anesMode&&s.anesMode[t]==='par')?0:(s.anes[t]||0))+s.dur[t];
-  const ceilMap={}; TYPES.forEach(t=>ceilMap[t]=ceiling(s,t).n);
-  const cand=[];
-  cand.push(ops.slice());                                   // как есть
-  cand.push(ops.slice().sort((a,b)=>w(b)-w(a)));            // сначала длинные (LPT)
-  cand.push(ops.slice().sort((a,b)=>w(a)-w(b)));            // сначала короткие (SPT)
-  cand.push(ops.slice().sort((a,b)=>ceilMap[a]-ceilMap[b])); // сначала самые дефицитные
-  const cnt={}; ops.forEach(t=>cnt[t]=(cnt[t]||0)+1);
-  cand.push(buildOrder(cnt));                                // чередованием по типам
-  for(let k=0;k<400;k++){                                    // случайные перестановки
-    const a=ops.slice();
-    for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
-    cand.push(a);
-  }
-  let best=ops.slice(), bf=-1, bm=Infinity;
-  for(const c of cand){
-    const r=simulate(s,c);
-    const fit=r.sched.length, mk=r.sched.reduce((m,o)=>Math.max(m,o.end),0);
-    if(fit>bf || (fit===bf && mk<bm)){ bf=fit; bm=mk; best=c.slice(); }
-  }
-  return best;
-}
-function seqBest(){
-  const s=readState();
-  let ops=opSequence.slice();
-  if(!ops.length) ops=planToOps(s);
-  if(!ops.length){ renderSeq(); return; }
-  opSequence=bestOrder(s, ops);
-  renderSeq();
-}
-
-function renderSeq(){
-  const s=readState();
-  $('seqAddRow').innerHTML=TYPES.map(t=>
-    `<button class="btn sm" onclick="seqAdd('${t}')" style="border-color:${OPS[t].color}">+ ${OPS[t].label}</button>`
-  ).join('');
-  const r=simulate(s, opSequence);
-  const byIdx={}; r.sched.forEach(o=>byIdx[o.oidx]=o);
-  const rejByIdx={}; (r.rejList||[]).forEach(x=>rejByIdx[x.i]=x);
-  const fitN=r.sched.length, rejN=opSequence.length-fitN;
-  const makespan=r.sched.reduce((m,o)=>Math.max(m,o.end),0);
-
-  // бейдж реализуемости
-  const fe=$('seqFeas');
-  if(!opSequence.length){ fe.className='feas idle'; fe.innerHTML='Список пуст. Добавьте операции кнопками «+» или нажмите «Взять из плана сверху».'; }
-  else if(rejN===0){ fe.className='feas ok'; fe.innerHTML=`<b>✓ Реализуем.</b> Все ${fitN} операц. влезают в этом порядке, день заканчивается в <b>${fmtTime(makespan)}</b>.`; }
-  else { const top=Object.entries(r.blame).sort((a,b)=>b[1]-a[1])[0];
-    fe.className='feas bad'; fe.innerHTML=`<b>✗ Не реализуем в этом порядке.</b> Не влезает ${rejN} из ${opSequence.length} (узкое место: ${top?top[0]:'—'}). Нажмите «Лучший порядок».`; }
-
-  // список с управлением
-  $('seqList').innerHTML=opSequence.map((t,i)=>{
-    const o=byIdx[i], rj=rejByIdx[i];
-    const status = o
-      ? `<span class="ok-s">${fmtTime(o.start)}–${fmtTime(o.end)} · стол ${o.tower+1}</span>`
-      : `<span class="bad-s">не влезает${rj?` · ${rj.who}`:''}</span>`;
-    return `<div class="seqitem ${o?'fit':'nofit'}">
-      <span class="ord">${i+1}</span><span class="dot" style="background:${OPS[t].color}"></span>
-      <span class="nm">${OPS[t].label}</span><span class="status">${status}</span>
-      <span class="seqbtns">
-        <button class="mv" onclick="seqMoveUp(${i})" title="выше" ${i===0?'disabled':''}>↑</button>
-        <button class="mv" onclick="seqMoveDown(${i})" title="ниже" ${i===opSequence.length-1?'disabled':''}>↓</button>
-        <button class="x" onclick="seqRemoveAt(${i})" title="убрать">×</button>
-      </span></div>`;
-  }).join('');
-
-  // таблица с раскладкой (какой набор, до скольких в стерилизации)
-  if(r.sched.length){
-    const sName={}; (s.surgeonList||[]).forEach(g=>sName[g.id]=g.name);
-    const rows=r.sched.slice().sort((a,b)=>a.oidx-b.oidx).map(o=>
-      `<tr><td>${o.oidx+1}</td><td><span class="dot" style="background:${OPS[o.type].color}"></span>${OPS[o.type].label}</td>
-       <td>${o.tower+1}</td><td>${fmtTime(o.start)}–${fmtTime(o.end)}</td><td class="muted">${escHtml(sName[o.surg]||'—')}</td>
-       <td>${setName(o.setCat,o.setIdx)}</td><td class="muted">${fmtTime(o.end+s.ster)}</td></tr>`
-    ).join('');
-    $('seqResult').innerHTML=`<table style="margin-top:12px"><thead><tr>
-      <th>#</th><th>Операция</th><th>Стол</th><th>Время</th><th>Хирург</th><th>Набор</th><th>Набор свободен</th>
-    </tr></thead><tbody>${rows}</tbody></table>`;
-  } else $('seqResult').innerHTML='';
-}
 
 // изменение настроек/плана сбрасывает ручную раскладку (иначе она устаревает: геометрия, фантомные столы);
 // поля-формы, которые сами по себе план не меняют (дата, заготовки журнала/блокировок), раскладку не трогают
