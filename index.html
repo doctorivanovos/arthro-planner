@@ -345,6 +345,17 @@
   <div class="printhead" id="printHead"></div>
 </header>
 
+<!-- ТАП ПО ОПЕРАЦИИ НА ЛЕНТЕ: выполнена + импланты -->
+<div id="opMenu" class="wiz noprint" style="display:none" onclick="if(event.target===this)closeOpMenu()">
+  <div class="wizcard" style="max-width:400px">
+    <div class="wizhead"><b id="opMenuTitle"></b><button class="x implhead-x" onclick="closeOpMenu()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
+    <div class="note" id="opMenuSub" style="margin:0 0 12px"></div>
+    <button class="btn primary wizgo" style="margin-top:0" onclick="markDoneFromPlan(true)">✓ Выполнена — списать импланты</button>
+    <button class="btn wizgo" onclick="markDoneFromPlan(false)">✓ Выполнена (без имплантов)</button>
+    <div class="note" style="margin-top:10px">Операция попадёт в «Журнал выполненного». Перетаскивание блока работает как раньше — меню открывает только короткий тап.</div>
+  </div>
+</div>
+
 <!-- БЫСТРЫЙ ПЛАН: стартовый экран-калькулятор (особенно для телефона) -->
 <div id="wizard" class="wiz noprint" style="display:none">
   <div class="wizcard">
@@ -928,7 +939,7 @@ function implCatalogFor(d){ return IMPLANT_CATALOG[d.type]||[]; }
 function openImplants(id){
   const d=doneLog.find(x=>x.id===id); if(!d) return;
   implEditId=id;
-  const lbl=OPS[d.type]?OPS[d.type].label:d.type;
+  const lbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
   $('implTitle').textContent=`Импланты: ${lbl} · до ${minToClock(d.end)} · стол ${d.tower+1}`;
   $('impl_pat').value=d.pat||'';
   $('impl_name').value=''; $('impl_mfr').value=''; $('impl_size').value=''; $('impl_qty').value='1';
@@ -1002,7 +1013,7 @@ function sliceImpl(){
   let out='Списание имплантов за день\n\n';
   if(!rows.length) out+='импланты не списывались (заполняются в «Журнале выполненного» кнопкой «имп.»)\n';
   else rows.forEach(d=>{
-    const lbl=OPS[d.type]?OPS[d.type].label:d.type;
+    const lbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
     out+=`${minToClock(d.end)}  ${lbl} · стол ${d.tower+1}${d.pat?' — '+d.pat:''}\n`;
     (d.implants||[]).forEach(x=>{ out+=`    ${implLine(x)}\n`; });
     if(!(d.implants&&d.implants.length)) out+='    —\n';
@@ -1019,7 +1030,7 @@ function renderDone(s){
   // и перестановка checked здесь не давала снять режим (гонка событий). Синхронизируем при загрузке/программных изменениях.
   const chips=doneLog.slice().sort((a,b)=>a.end-b.end).map(d=>{
     const oob = d.tower>=N ? ' · <span style="color:var(--bad)">вне диапазона</span>':'';
-    const col=OPS[d.type]?OPS[d.type].color:'#888', lbl=OPS[d.type]?OPS[d.type].label:d.type;
+    const col=OPS[d.type]?OPS[d.type].color:'#888', lbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
     const ni=implSum(d);
     const ib=`<button class="implbtn${ni?' has':''}" onclick="openImplants('${d.id}')" title="списать импланты на пациента">${ni?'имп. '+ni:'+ имп.'}</button>`;
     return `<span class="chip done"><span class="dot" style="background:${col}"></span><span class="rem">${lbl}</span><span class="muted">${escHTML(d.pat||'')}${d.pat?' · ':''}до ${minToClock(d.end)} · стол ${d.tower+1}${oob}</span>${ib}<button class="x" onclick="removeDone('${d.id}')" title="убрать">×</button></span>`;
@@ -1740,6 +1751,7 @@ function render(){
     lastPlan={sched:r.sched, s, useCases:useCasesNow};   // срезы — по АВТО-расписанию
     $('schedMode').innerHTML = `<span class="muted">Совет: операции можно перетаскивать ${matchMedia('(pointer:coarse)').matches?'пальцем':'мышью'} — поменять стол и сдвинуть время прямо на ленте.</span>`;
   }
+  lastDrawSched=drawSched;   // для тап-меню операции на ленте
   drawGantt(s, drawSched, !!manualOps, conf);
   if(curSliceRole && $('sliceActions') && $('sliceActions').style.display==='flex') showSlice(curSliceRole);   // обновить показанный срез под текущий план
   drawCeilings(s);
@@ -1764,6 +1776,37 @@ function bumpAndCount(s, name, order){
 /* ---------- ручное расписание: перетаскивание операций ---------- */
 let lastAutoSched=[];   // последнее авто-расписание (для входа в ручной режим)
 let lastGanttDay=null;  // масштаб последней отрисовки ленты (на телефоне короче полного дня)
+let lastDrawSched=[];   // операции, нарисованные на ленте (для тап-меню)
+
+/* ---------- тап по операции на ленте: отметить выполненной и списать импланты ---------- */
+function openOpMenu(mid){
+  const o=lastDrawSched.find(x=>x._mid===mid); if(!o) return;
+  const host=$('opMenu'); if(!host) return;
+  const nm=o._name?o._name:opLabel(o);
+  $('opMenuTitle').innerHTML=`<span class="dot" style="background:${opColor(o)}"></span>${escHtml(nm)}${o._name?` <span class="muted">· ${escHtml(opLabel(o))}</span>`:''}`;
+  $('opMenuSub').textContent=`${fmtTime(o.start)}–${fmtTime(o.end)} · стол ${o.tower+1}`;
+  host._mid=mid;
+  host.style.display='flex';
+}
+function closeOpMenu(){ const h=$('opMenu'); if(h) h.style.display='none'; }
+function markDoneFromPlan(withImpl){
+  const host=$('opMenu'); const o=host&&lastDrawSched.find(x=>x._mid===host._mid);
+  closeOpMenu(); if(!o) return;
+  const s=readState();
+  const isStd=!!OPS[o.type];
+  const entry={ id:Date.now()+'-'+Math.random().toString(36).slice(2,6),
+    type:isStd?o.type:'custom', end:Math.max(0,Math.min(o.end,s.day)), tower:o.tower,
+    pat:o._name||'' };
+  if(!isStd) entry.lbl=opLabel(o);
+  doneLog.push(entry);
+  // режим «остатка дня» НЕ трогаем: списание — не переключение планирования
+  saveSettings(); render();
+  if(withImpl){
+    [...document.querySelectorAll('details.acc')].forEach(d=>{ if(d.textContent.includes('Уже сделано')) d.open=true; });
+    openImplants(entry.id);
+    const e=$('implEditor'); if(e) e.scrollIntoView({block:'center',behavior:'smooth'});
+  }
+}
 let drag=null;
 function enterManual(){ manualOps=(lastAutoSched||[]).map((o,i)=>({id:o._mid||('m'+i), type:o.type, tower:o.tower, start:o.start, name:o._name||null, label:o.label, color:o.color, sets:o.sets, shaver:o.shaver, dur:o.dur, anes:o.anes, anesMode:o.anesMode, skillType:o.skillType})); }
 function exitManual(){ manualOps=null; render(); }
@@ -1832,6 +1875,7 @@ function setupGanttDrag(){
   });
   window.addEventListener('pointerup', e=>{
     if(!drag) return;
+    if(!drag.moved){ const mid=drag.mid; drag=null; openOpMenu(mid); return; }   // тап без движения = меню операции
     if(drag.moved){
       const dx=e.clientX-drag.startX, dy=e.clientY-drag.startY;
       const dMin=drag.trackW>10 ? Math.round((dx/drag.trackW*drag.day)/5)*5 : 0;   // если ширину не измерить — только смена стола
@@ -1874,7 +1918,7 @@ function drawGantt(s, sched, manual, conf){
       if(s.nowFloor>0) ops+=`<div class="pastb" style="left:0;width:${Math.min(100,s.nowFloor/day*100)}%" title="Прошло (08:00–${fmtTime(s.nowFloor)})"></div>`;
       (s.doneLog||[]).filter(d=>d.tower===lane).forEach(d=>{
         const ddur=s.dur[d.type]||0, dst=Math.max(0,d.end-ddur);
-        const dcol=OPS[d.type]?OPS[d.type].color:'#888', dlbl=OPS[d.type]?OPS[d.type].label:d.type;
+        const dcol=OPS[d.type]?OPS[d.type].color:'#888', dlbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
         ops+=`<div class="op donep" style="left:${dst/day*100}%;width:${ddur/day*100}%;background:${dcol}" title="Сделано (журнал): ${dlbl} ${fmtTime(dst)}–${fmtTime(d.end)}">${dlbl}</div>`;
       });
     }
