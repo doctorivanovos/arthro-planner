@@ -134,6 +134,25 @@
   .implbox .implhead .x{cursor:pointer;border:none;width:22px;height:22px;border-radius:6px;background:var(--line);color:var(--txt);font-size:14px;line-height:1}
   .implbox .implhead .x:hover{background:var(--bad);color:#fff}
   .implbox .cname,.implbox .cdur{background:var(--panel)}
+  .impltplrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:7px 0}
+  .impltplrow .tpllbl{flex:0 0 100%;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:600}
+  .tchip{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:6px 11px;font-size:13px;cursor:pointer;color:var(--txt);line-height:1.2}
+  .tchip:hover{border-color:var(--accent)}
+  .tchip:active{background:var(--accent);color:#fff}
+  .tchip .tmfr{font-size:10.5px;color:var(--muted)}
+  .tchip:active .tmfr{color:#fff}
+  .impllist{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+  .implitem{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:9px;padding:6px 9px;font-size:13.5px;flex-wrap:wrap}
+  .implitem .inm{flex:1;min-width:120px}
+  .implitem .isize{width:86px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;text-align:center}
+  .implitem .isize:focus{outline:none;border-color:var(--accent)}
+  .implitem .iq{display:inline-flex;align-items:center;gap:7px}
+  .implitem .iq button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);font-size:16px;cursor:pointer;color:var(--txt);line-height:1}
+  .implitem .iq b{min-width:18px;text-align:center}
+  .implitem .x{border:none;width:26px;height:26px;border-radius:7px;background:var(--line);color:var(--txt);cursor:pointer;font-size:14px;line-height:1}
+  .implitem .x:hover{background:var(--bad);color:#fff}
+  .implfree{margin-top:10px}
+  .implfree summary{font-size:12.5px;color:var(--muted)}
   .chip .implbtn{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:1px 8px;font-size:11px;color:var(--muted)}
   .chip .implbtn:hover{border-color:var(--accent);color:var(--accent)}
   .chip .implbtn.has{border-color:var(--gold);color:#8a6a16;font-weight:600}
@@ -515,14 +534,21 @@
       <div class="implbox" id="implEditor" style="display:none">
         <div class="implhead"><b id="implTitle"></b><button class="x" onclick="closeImplants()" title="закрыть">×</button></div>
         <div class="blkrow">
-          <input type="text" class="cname" id="impl_pat" placeholder="Пациент (фамилия)" oninput="implPat(this.value)" style="flex:0 1 170px">
-          <input type="text" class="cname" id="impl_name" list="implNames" placeholder="Имплант — например: анкер 3,5 биокомпозит" style="flex:1;min-width:150px" onkeydown="if(event.key==='Enter')implAdd()">
-          <span class="sep">×</span><input type="number" class="cdur" id="impl_qty" value="1" min="1" step="1" title="сколько штук">
-          <button class="btn sm primary" onclick="implAdd()">Списать</button>
+          <input type="text" class="cname" id="impl_pat" placeholder="Пациент (фамилия)" oninput="implPat(this.value)" style="flex:1 1 170px">
         </div>
-        <div class="chips" id="implChips"></div>
-        <datalist id="implNames"></datalist>
-        <div class="note">Названия запоминаются — в следующий раз имплант подскажется при вводе. Сводка дня — кнопка «Списание имплантов» в «Срезах для бригады».</div>
+        <div id="implTpl"></div>
+        <div class="impllist" id="implItems"></div>
+        <details class="implfree"><summary>Другой имплант (нет в списке)</summary>
+          <div class="blkrow" style="margin-top:8px">
+            <input type="text" class="cname" id="impl_name" list="implNames" placeholder="Название" style="flex:1 1 120px;min-width:110px" onkeydown="if(event.key==='Enter')implAdd()">
+            <input type="text" class="cname" id="impl_mfr" list="implMfrs" placeholder="Производитель" style="flex:0 1 130px">
+            <input type="text" class="cname" id="impl_size" placeholder="Размер" style="flex:0 1 80px">
+            <span class="sep">×</span><input type="number" class="cdur" id="impl_qty" value="1" min="1" step="1" title="сколько штук">
+            <button class="btn sm primary" onclick="implAdd()">Списать</button>
+          </div>
+        </details>
+        <datalist id="implNames"></datalist><datalist id="implMfrs"></datalist>
+        <div class="note">Нажмите имплант из шаблона операции — он спишется, останется уточнить размер и количество. Сводка дня — кнопка «Списание имплантов» в «Срезах для бригады».</div>
       </div>
       <div class="btnrow" id="doneClearRow" style="display:none"><button class="btn sm" onclick="clearDone()">Очистить журнал</button></div>
       <div class="note" id="doneNote"></div>
@@ -881,60 +907,149 @@ function clearDone(){ manualOps=null; closeImplants(true); doneLog=[]; saveSetti
 
 /* ---------- списание имплантов на пациента (в журнале выполненного) ---------- */
 const IMPL_KEY='arthroImplants1';
-let implDict=[];   // справочник названий имплантов — самообучается
-try{ implDict=JSON.parse(localStorage.getItem(IMPL_KEY))||[]; if(!Array.isArray(implDict)) implDict=[]; }catch(e){ implDict=[]; }
+// каталог отделения: что обычно списывается после каждой операции (правится по факту работы)
+const IMPLANT_CATALOG={
+  acl:[
+    {pos:'Винт интерферентный', v:[
+      {n:'Biosteon', m:'Stryker', s:['8×23','8×28']},
+      {n:'Milagro',  m:'DePuy Mitek', s:['8×23','8×28']}]},
+    {pos:'Пуговица', v:[
+      {n:'TightRope', m:'Arthrex'},
+      {n:'ProCinch',  m:'Stryker'},
+      {n:'ZipLoop',   m:'Zimmer Biomet'},
+      {n:'RigidLoop', m:'DePuy Mitek'}]},
+  ],
+  bankart:[
+    {pos:'Анкер', v:[{n:'Lupine', m:'DePuy Mitek'}]},
+    {pos:'Ремплиссаж — анкер', v:[
+      {n:'Corkscrew', m:'Arthrex'},
+      {n:'Healix',    m:'DePuy Mitek'},
+      {n:'Quattro X', m:'Zimmer Biomet'}]},
+  ],
+  cuff:[
+    {pos:'1-й ряд — узловой анкер', v:[
+      {n:'Corkscrew', m:'Arthrex'},
+      {n:'Healix',    m:'DePuy Mitek'},
+      {n:'Quattro X', m:'Zimmer Biomet'}]},
+    {pos:'2-й ряд — безузловой', v:[
+      {n:'SwiveLock', m:'Arthrex'},
+      {n:'Quattro X', m:'Zimmer Biomet'},
+      {n:'ReelX STT', m:'Stryker'}]},
+  ],
+  meniscus:[
+    {pos:'Шов мениска', v:[
+      {n:'AIR+',       m:'Stryker'},
+      {n:'FasT-Fix',   m:'Smith & Nephew'},
+      {n:'Sequent',    m:'ConMed'},
+      {n:'FiberStitch', m:'Arthrex'}]},
+  ],
+  latarjet:[
+    {pos:'Винты', q:2, v:[{n:'Винт Латарже', m:'DePuy Mitek'}]},
+  ],
+};
+// самообучающийся справочник для свободного ввода: названия, производители, размеры по названию
+let implDict={names:[],mfrs:[],sizes:{}};
+try{ const o=JSON.parse(localStorage.getItem(IMPL_KEY));
+  if(Array.isArray(o)) implDict.names=o;   // миграция со старого формата (плоский список названий)
+  else if(o&&typeof o==='object') implDict={names:o.names||[],mfrs:o.mfrs||[],sizes:o.sizes||{}};
+}catch(e){}
 let implEditId=null;   // id записи журнала, для которой открыт редактор
 const escHTML=x=>(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function implSum(d){ return (d.implants||[]).reduce((a,x)=>a+(+x.q||0),0); }
-function rememberImpl(name){
-  const n=name.trim(); if(!n) return;
-  implDict=[n].concat(implDict.filter(x=>x.toLowerCase()!==n.toLowerCase())).slice(0,40);
-  try{ localStorage.setItem(IMPL_KEY, JSON.stringify(implDict)); }catch(e){}
-  renderImplNames();
+function saveImplDict(){ try{ localStorage.setItem(IMPL_KEY, JSON.stringify(implDict)); }catch(e){} }
+function rememberImpl(n,m,size){
+  const push=(arr,v)=>v?[v].concat(arr.filter(x=>x.toLowerCase()!==v.toLowerCase())).slice(0,40):arr;
+  implDict.names=push(implDict.names,(n||'').trim());
+  implDict.mfrs=push(implDict.mfrs,(m||'').trim());
+  const nk=(n||'').trim().toLowerCase(), sz=(size||'').trim();
+  if(nk&&sz){ implDict.sizes[nk]=push(implDict.sizes[nk]||[],sz).slice(0,12); }
+  saveImplDict(); renderImplNames();
 }
-function renderImplNames(){ const dl=$('implNames'); if(dl) dl.innerHTML=implDict.map(n=>`<option value="${escHTML(n)}">`).join(''); }
+function renderImplNames(){
+  const dn=$('implNames'); if(dn) dn.innerHTML=implDict.names.map(n=>`<option value="${escHTML(n)}">`).join('');
+  const dm=$('implMfrs'); if(dm) dm.innerHTML=implDict.mfrs.map(n=>`<option value="${escHTML(n)}">`).join('');
+}
+function implCatalogFor(d){ return IMPLANT_CATALOG[d.type]||[]; }
 function openImplants(id){
   const d=doneLog.find(x=>x.id===id); if(!d) return;
   implEditId=id;
   const lbl=OPS[d.type]?OPS[d.type].label:d.type;
   $('implTitle').textContent=`Импланты: ${lbl} · до ${minToClock(d.end)} · стол ${d.tower+1}`;
   $('impl_pat').value=d.pat||'';
-  $('impl_name').value=''; $('impl_qty').value='1';
-  renderImplNames(); renderImplChips();
+  $('impl_name').value=''; $('impl_mfr').value=''; $('impl_size').value=''; $('impl_qty').value='1';
+  renderImplNames(); renderImplTpl(); renderImplItems();
   $('implEditor').style.display='';
-  $('impl_pat').value?$('impl_name').focus():$('impl_pat').focus();
+  if(!$('impl_pat').value) $('impl_pat').focus();
 }
 function closeImplants(silent){ implEditId=null; const e=$('implEditor'); if(e)e.style.display='none'; if(!silent){ saveSettings(); render(); } }
 function implPat(v){ const d=doneLog.find(x=>x.id===implEditId); if(d) d.pat=v; }
+// шаблон операции: позиции с вариантами-чипами; нажатие = списать
+function renderImplTpl(){
+  const d=doneLog.find(x=>x.id===implEditId); const host=$('implTpl'); if(!host) return;
+  const cat=d?implCatalogFor(d):[];
+  host.innerHTML=cat.map((p,pi)=>`<div class="impltplrow"><span class="tpllbl">${escHTML(p.pos)}</span>`
+    +p.v.map((v,vi)=>`<button class="tchip" onclick="implAddVar(${pi},${vi})" title="${escHTML(v.m)} — нажмите, чтобы списать">${escHTML(v.n)}<span class="tmfr">${escHTML(v.m)}</span></button>`).join('')
+    +`</div>`).join('') || (d&&d.type==='custom'?'':'');
+}
+function implAddVar(pi,vi){
+  const d=doneLog.find(x=>x.id===implEditId); if(!d) return;
+  const p=implCatalogFor(d)[pi]; const v=p&&p.v[vi]; if(!v) return;
+  if(!d.implants) d.implants=[];
+  d.implants.push({n:v.n, m:v.m, size:(v.s&&v.s.length===1)?v.s[0]:'', q:p.q||1});
+  rememberImpl(v.n,v.m,'');
+  renderImplItems(); saveSettings(); render();
+  // сразу в размер нового пункта — уточнить одним движением
+  const inputs=document.querySelectorAll('#implItems .isize');
+  if(inputs.length) inputs[inputs.length-1].focus();
+}
 function implAdd(){
   const d=doneLog.find(x=>x.id===implEditId); if(!d) return;
-  const n=$('impl_name').value.trim(); const q=Math.max(1,Math.round(+$('impl_qty').value||1));
-  if(!n){ $('impl_name').focus(); return; }
+  const n=$('impl_name').value.trim(); if(!n){ $('impl_name').focus(); return; }
+  const m=$('impl_mfr').value.trim(), size=$('impl_size').value.trim();
+  const q=Math.max(1,Math.round(+$('impl_qty').value||1));
   if(!d.implants) d.implants=[];
-  const same=d.implants.find(x=>x.n.toLowerCase()===n.toLowerCase());
-  if(same) same.q+=q; else d.implants.push({n,q});
-  rememberImpl(n);
-  $('impl_name').value=''; $('impl_qty').value='1'; $('impl_name').focus();
-  renderImplChips(); saveSettings(); render();
+  d.implants.push({n,m,size,q});
+  rememberImpl(n,m,size);
+  $('impl_name').value=''; $('impl_size').value=''; $('impl_qty').value='1'; $('impl_name').focus();
+  renderImplItems(); saveSettings(); render();
 }
-function implRemove(i){ const d=doneLog.find(x=>x.id===implEditId); if(!d||!d.implants) return; d.implants.splice(i,1); renderImplChips(); saveSettings(); render(); }
-function renderImplChips(){
-  const d=doneLog.find(x=>x.id===implEditId); const host=$('implChips'); if(!host) return;
-  host.innerHTML=(d&&d.implants||[]).map((x,i)=>
-    `<span class="chip done"><span class="rem">${escHTML(x.n)}</span><span class="muted">× ${x.q}</span><button class="x" onclick="implRemove(${i})" title="убрать">×</button></span>`
-  ).join('')||'<span class="note" style="margin:0">пока ничего не списано</span>';
+function implSet(i,f,v){ const d=doneLog.find(x=>x.id===implEditId); if(!d||!d.implants||!d.implants[i]) return; d.implants[i][f]=v; if(f==='size') rememberImpl(d.implants[i].n,'',v); }
+function implQ(i,delta){ const d=doneLog.find(x=>x.id===implEditId); if(!d||!d.implants||!d.implants[i]) return; d.implants[i].q=Math.max(1,Math.round((+d.implants[i].q||1)+delta)); renderImplItems(); saveSettings(); render(); }
+function implRemove(i){ const d=doneLog.find(x=>x.id===implEditId); if(!d||!d.implants) return; d.implants.splice(i,1); renderImplItems(); saveSettings(); render(); }
+// списанные позиции: размер уточняется на месте, количество степпером
+function renderImplItems(){
+  const d=doneLog.find(x=>x.id===implEditId); const host=$('implItems'); if(!host) return;
+  const items=(d&&d.implants)||[];
+  // подсказки размеров: каталожные + выученные по названию
+  const sizesFor=x=>{
+    const cat=d?implCatalogFor(d):[]; let s=[];
+    cat.forEach(p=>p.v.forEach(v=>{ if(v.n===x.n&&v.s) s=s.concat(v.s); }));
+    s=s.concat(implDict.sizes[(x.n||'').toLowerCase()]||[]);
+    return [...new Set(s)];
+  };
+  host.innerHTML=items.map((x,i)=>{
+    const sz=sizesFor(x);
+    return `<div class="implitem">
+      <span class="inm"><b>${escHTML(x.n)}</b>${x.m?`<span class="muted"> · ${escHTML(x.m)}</span>`:''}</span>
+      <input class="isize" list="isz-${i}" value="${escHTML(x.size||'')}" placeholder="размер" oninput="implSet(${i},'size',this.value)">
+      <datalist id="isz-${i}">${sz.map(s=>`<option value="${escHTML(s)}">`).join('')}</datalist>
+      <span class="iq"><button onclick="implQ(${i},-1)">−</button><b>${x.q}</b><button onclick="implQ(${i},1)">+</button></span>
+      <button class="x" onclick="implRemove(${i})" title="убрать">×</button>
+    </div>`;
+  }).join('')||'<div class="note" style="margin:6px 0 0">пока ничего не списано — нажмите имплант выше</div>';
 }
+const implLine=x=>`${x.n}${x.size?' '+x.size:''}${x.m?' ('+x.m+')':''} × ${x.q}`;
 // срез: списание имплантов за день (для старшей м/с)
 function sliceImpl(){
   const rows=doneLog.slice().sort((a,b)=>a.end-b.end).filter(d=>(d.implants&&d.implants.length)||d.pat);
   const tot={};
-  doneLog.forEach(d=>(d.implants||[]).forEach(x=>{ const k=x.n; tot[k]=(tot[k]||0)+(+x.q||0); }));
+  doneLog.forEach(d=>(d.implants||[]).forEach(x=>{ const k=`${x.n}${x.size?' '+x.size:''}${x.m?' ('+x.m+')':''}`; tot[k]=(tot[k]||0)+(+x.q||0); }));
   let out='Списание имплантов за день\n\n';
   if(!rows.length) out+='импланты не списывались (заполняются в «Журнале выполненного» кнопкой «имп.»)\n';
   else rows.forEach(d=>{
     const lbl=OPS[d.type]?OPS[d.type].label:d.type;
     out+=`${minToClock(d.end)}  ${lbl} · стол ${d.tower+1}${d.pat?' — '+d.pat:''}\n`;
-    (d.implants||[]).forEach(x=>{ out+=`    ${x.n} × ${x.q}\n`; });
+    (d.implants||[]).forEach(x=>{ out+=`    ${implLine(x)}\n`; });
     if(!(d.implants&&d.implants.length)) out+='    —\n';
   });
   const keys=Object.keys(tot);
@@ -2107,7 +2222,7 @@ function renderSeq(){
 // изменение настроек/плана сбрасывает ручную раскладку (иначе она устаревает: геометрия, фантомные столы);
 // поля-формы, которые сами по себе план не меняют (дата, заготовки журнала/блокировок), раскладку не трогают
 const MANUAL_KEEP_IDS=['p_date','done_type','done_end','done_tower','blk_station','blk_from','blk_to','preset_sel','impl_pat','impl_name','impl_qty'];
-document.addEventListener('input',e=>{ if(manualOps && !(e.target && MANUAL_KEEP_IDS.indexOf(e.target.id)>=0)){ manualOps=null; } render(); });
+document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor')))){ manualOps=null; } render(); });
 // колесо мыши над числовым полем не должно менять значение, но и не выбивать фокус при прокрутке страницы
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(renderSter,1000);
