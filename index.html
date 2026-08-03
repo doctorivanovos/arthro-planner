@@ -155,6 +155,8 @@
   #dayNamesWrap{margin-top:8px}
   .dnrow{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
   .dnrow .ord{width:20px;text-align:center;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+  .dnrow .dnord{width:52px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 4px;font-size:14px;text-align:center;font-weight:600}
+  .dnrow .dnord:focus{outline:none;border-color:var(--accent)}
   .dnrow .dntm{flex:0 0 auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums;min-width:96px}
   .dnrow .dnttl{flex:0 0 auto;font-size:13.5px;min-width:86px}
   .dnrow .cname{flex:1;min-width:110px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 10px;font-size:14px}
@@ -1066,7 +1068,7 @@ try{ const lim=new Date(); lim.setDate(lim.getDate()-90); const limStr=lim.toISO
   for(const k in dayStore){ if(k<limStr) delete dayStore[k]; } }catch(e){}
 function daySnapshot(){
   const mix={}; TYPES.forEach(t=>{const el=$('m_'+t); mix[t]=el?el.value:0;});
-  return {mix, cases:caseList, useCases, doneLog, useDoneLog, blocks:manualBlocks, custom:customList, names:dayNames};
+  return {mix, cases:caseList, useCases, doneLog, useDoneLog, blocks:manualBlocks, custom:customList, names:dayNames, order:dayOrder};
 }
 function applyDay(d){
   d=d||{};
@@ -1076,6 +1078,7 @@ function applyDay(d){
   manualBlocks=Array.isArray(d.blocks)?d.blocks:[];
   customList=Array.isArray(d.custom)?sanitizeCustom(d.custom):[]; customRenderedIds=null;
   dayNames=sanitizeNames(d.names); dayNamesSig=null;
+  dayOrder=Array.isArray(d.order)?d.order.filter(x=>typeof x==='string'):null;
   manualOps=null;
 }
 function switchDay(v){
@@ -1112,7 +1115,7 @@ const PERSIST_IDS=['inv_towers','inv_optics','inv_shavers','set_shoulder','set_a
 function saveSettings(){
   try{
     const f={}; PERSIST_IDS.forEach(id=>{const el=$(id); if(el) f[id]=el.value;});
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({fields:f, tableWin, blocks:manualBlocks, doneLog, useDoneLog, cases:caseList, useCases, surgeons:surgeonList, custom:customList, names:dayNames}));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({fields:f, tableWin, blocks:manualBlocks, doneLog, useDoneLog, cases:caseList, useCases, surgeons:surgeonList, custom:customList, names:dayNames, order:dayOrder}));
     if(curDay){ dayStore[curDay]=daySnapshot(); localStorage.setItem(DAYS_KEY, JSON.stringify(dayStore)); }
   }catch(e){
     if(!saveSettings._warned){ saveSettings._warned=true;
@@ -1135,6 +1138,7 @@ function loadSettings(){
     if(Array.isArray(o.surgeons)) surgeonList=sanitizeSurgeons(o.surgeons);
     if(Array.isArray(o.custom)) customList=sanitizeCustom(o.custom);
     if(o.names) dayNames=sanitizeNames(o.names);
+    if(Array.isArray(o.order)) dayOrder=o.order.filter(x=>typeof x==='string');
   }catch(e){}
   if(!surgeonList.length){
     // первый запуск: состав отделения по умолчанию (навыки — все операции; снимите лишние галочки)
@@ -1154,7 +1158,7 @@ function newDay(){
   if((caseList.length||doneLog.length||manualOps) && !confirm('Начать новый день? Список пациентов, журнал остатка дня, разовые блокировки и таймеры стерилизации очистятся. Настройки отделения и шаблоны останутся.')) return;
   caseList=[]; useCases=false; const c=$('use_cases'); if(c)c.checked=false;
   doneLog=[]; useDoneLog=false; const c2=$('use_done'); if(c2)c2.checked=false;
-  manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null; customList=[]; customRenderedIds=null; dayNames={}; dayNamesSig=null;
+  manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null; customList=[]; customRenderedIds=null; dayNames={}; dayNamesSig=null; dayOrder=null;
   try{ sterTimers=[]; setSterMap={}; saveSter(); }catch(e){}
   const sa=$('sliceActions'); if(sa)sa.style.display='none'; const so=$('sliceOut'); if(so)so.textContent='';
   const d=$('p_date'); if(d){ const t=new Date(); d.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); curDay=d.value; }
@@ -1385,13 +1389,23 @@ function customSpec(c){
 }
 // полный порядок дня: шаблонные типы + свои операции, чередованием (как buildOrder)
 function buildOrderFull(s, mix){
+  // каждый элемент несёт _slot = «тип:номер-вхождения» — стабильная личность операции:
+  // к нему привязаны фамилия (dayNames) и место в очереди (dayOrder)
   const rem={...(mix||s.mix)}; const cRem=customList.map(c=>Math.max(0,Math.round(c.count||0)));
-  const order=[]; let go=true;
+  const items=[]; const occ={}; let go=true;
   while(go){ go=false;
-    for(const t of TYPES){ if(rem[t]>0){ order.push(t); rem[t]--; go=true; } }
-    customList.forEach((c,i)=>{ if(cRem[i]>0){ order.push(customSpec(c)); cRem[i]--; go=true; } });
+    for(const t of TYPES){ if(rem[t]>0){ const k=(occ[t]=occ[t]||0); occ[t]++; items.push({slot:t+':'+k, el:{type:t,_slot:t+':'+k}}); rem[t]--; go=true; } }
+    customList.forEach((c,i)=>{ if(cRem[i]>0){ const k=(occ[c.id]=occ[c.id]||0); occ[c.id]++; const sp=customSpec(c); sp._slot=c.id+':'+k; items.push({slot:c.id+':'+k, el:sp}); cRem[i]--; go=true; } });
   }
-  return order;
+  // пользовательская очередь (назначенные номера) — только для основного плана, не для сценариев-прикидок
+  if(mix==null && Array.isArray(dayOrder) && dayOrder.length){
+    const map={}; items.forEach(x=>{ map[x.slot]=x.el; });
+    const out=[];
+    dayOrder.forEach(sl=>{ if(map[sl]){ out.push(map[sl]); delete map[sl]; } });
+    items.forEach(x=>{ if(map[x.slot]){ out.push(x.el); delete map[x.slot]; } });
+    return out;
+  }
+  return items.map(x=>x.el);
 }
 function addCustomOp(){ customList.push({id:'u'+Date.now()+Math.random().toString(36).slice(2,5), label:'', setCat:'acl', dur:45, count:1}); manualOps=null; saveSettings(); render(); const f=document.querySelectorAll('#customOps .cname'); if(f.length) f[f.length-1].focus(); }
 function removeCustomOp(id){ customList=customList.filter(c=>c.id!==id); manualOps=null; saveSettings(); render(); }
@@ -1760,15 +1774,17 @@ function render(){
       : `<b style="color:var(--ok)">✓ Ручное расписание корректно.</b> ${manualOps.length} операц., конец в <b>${fmtTime(mEnd)}</b>.`;
     $('schedMode').innerHTML = `<span class="manbadge">Ручной режим</span> вы перетащили расписание · <button class="btn sm" onclick="exitManual()">↻ Вернуть авто-расписание</button>`;
   } else {
-    // фамилии на операциях: поимённый режим — из списка пациентов; числовой — из «Пациентов дня» (k-я операция типа)
+    // фамилии на операциях: поимённый режим — из списка пациентов; числовой — из «Пациентов дня» (слот = k-я операция типа)
     const occCnt={};
     r.sched.slice().sort((a,b)=>a.oidx-b.oidx).forEach(o=>{
-      const el=order[o.oidx]; const key=(el&&el._cid)||o.type;
-      const k=(occCnt[key]=(occCnt[key]||0)); occCnt[key]++;
+      const el=order[o.oidx]; let key,k;
+      if(el&&el._slot){ const p=el._slot.lastIndexOf(':'); key=el._slot.slice(0,p); k=+el._slot.slice(p+1)||0; }
+      else { key=(el&&el._cid)||o.type; k=(occCnt[key]=(occCnt[key]||0)); occCnt[key]++; }
       o._nkey=key; o._nocc=k;
       o._name = useCasesNow ? (caseList[o.oidx]?caseLabel(caseList[o.oidx]):null)
                             : ((dayNames[key]&&dayNames[key][k])||null);
     });
+    lastOrderSlots=order.map(el=>el&&el._slot).filter(Boolean);
     drawSched = r.sched.map((o,i)=>Object.assign({_mid:'m'+i}, o));
     lastAutoSched = drawSched;
     lastPlan={sched:r.sched, s, useCases:useCasesNow};   // срезы — по АВТО-расписанию
@@ -1807,6 +1823,17 @@ let lastDrawSched=[];   // операции, нарисованные на ле�
 // при изменении количеств чужие фамилии не слетают
 let dayNames={};        // {bankart:['Иванов',...], acl:[...], <id своей операции>:[...]}
 let dayNamesSig=null;
+let dayOrder=null;      // назначенные номера: массив слотов 'тип:k' в порядке очереди (null = авто-чередование)
+let lastDayRowSlots=[]; // слоты строк «Пациентов дня» в показанном порядке (для переназначения номера)
+let lastOrderSlots=[];  // все слоты текущего плана (включая не влезшие)
+function queueAssign(slot, v){
+  const list=lastDayRowSlots.slice(); const from=list.indexOf(slot); if(from<0){ render(); return; }
+  const to=Math.max(1, Math.min(list.length, Math.round(+v)||1))-1;
+  list.splice(from,1); list.splice(to,0,slot);
+  const rest=(lastOrderSlots||[]).filter(sl=>list.indexOf(sl)<0);   // не влезшие — в хвост очереди
+  dayOrder=list.concat(rest);
+  manualOps=null; saveSettings(); render();
+}
 function sanitizeNames(o){
   const r={}; if(!o||typeof o!=='object') return r;
   for(const k in o){ if(Array.isArray(o[k])) r[k]=o[k].map(x=>typeof x==='string'?x:''); }
@@ -1819,14 +1846,18 @@ function renderDayNames(s, sched, order, uc){
   wrap.style.display='';
   const occ={};
   const rows=sched.slice().sort((a,b)=>a.oidx-b.oidx).map(o=>{
-    const el=order&&order[o.oidx]; const key=(el&&el._cid)||o.type;
-    const k=(occ[key]=(occ[key]||0)); occ[key]++;
-    return {key,k,o};
+    let key,k;
+    if(o._nkey!=null){ key=o._nkey; k=o._nocc; }
+    else { const el=order&&order[o.oidx]; key=(el&&el._cid)||o.type; k=(occ[key]=(occ[key]||0)); occ[key]++; }
+    return {key,k,slot:key+':'+k,o};
   }).sort((a,b)=>a.o.start-b.o.start||a.o.tower-b.o.tower);
-  const sig=rows.map(r=>r.key+':'+r.k).join('|');
+  lastDayRowSlots=rows.map(r=>r.slot);
+  const sig=rows.map(r=>r.slot).join('|');
   if(sig!==dayNamesSig){
     dayNamesSig=sig;
-    host.innerHTML=rows.map((r,i)=>`<div class="dnrow"><span class="ord">${i+1}</span><span class="dot" style="background:${opColor(r.o)}"></span>`
+    host.innerHTML=rows.map((r,i)=>`<div class="dnrow">`
+      +`<input type="number" class="dnord" min="1" max="${rows.length}" value="${i+1}" title="номер в очереди — впишите новый, план перестроится" onchange="queueAssign('${r.slot}',this.value)">`
+      +`<span class="dot" style="background:${opColor(r.o)}"></span>`
       +`<span class="dntm">${fmtTime(r.o.start)} · стол ${r.o.tower+1}</span><span class="dnttl">${escHtml(opLabel(r.o))}</span>`
       +`<input type="text" class="cname" placeholder="фамилия" value="${escHtml((dayNames[r.key]&&dayNames[r.key][r.k])||'')}" oninput="dayNamesSet('${r.key}',${r.k},this.value)"></div>`).join('')
       ||'<div class="note">операций в плане нет — задайте их выше</div>';
