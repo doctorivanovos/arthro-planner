@@ -126,6 +126,37 @@
   #wizCustomAdd .cname,#wizCustomAdd .cdur,#wizCustomAdd select.blk{background:var(--panel2)}
   #wiz_date{font-size:15px;padding:9px 11px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
   .wizday{margin-left:10px;color:var(--muted);font-size:13.5px}
+  /* идёт день: диспетчерский экран */
+  .live{position:fixed;inset:0;z-index:90;background:var(--bg);overflow:auto;padding:18px 20px 40px}
+  .livehead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}
+  .liveclock{font-size:52px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .livedate{color:var(--muted);font-size:15px;margin-top:4px}
+  .livetables{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
+  .ltcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .ltcard .ltt{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin-bottom:8px}
+  .ltcard .ltnow{font-size:24px;font-weight:700;line-height:1.25}
+  .ltcard .ltnow .muted{font-size:16px;font-weight:400}
+  .ltcard .ltfree{font-size:22px;color:var(--ok);font-weight:600}
+  .ltcard .ltsub{font-size:15px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+  .ltcard .ltbar{height:10px;background:var(--panel2);border-radius:99px;overflow:hidden;margin-top:10px}
+  .ltcard .ltbar span{display:block;height:100%;background:var(--accent);border-radius:99px}
+  .ltcard .ltnext{font-size:15px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+  .ltcard .ltbtns{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+  .ltcard .ltbtns .btn{font-size:14px;padding:10px 13px}
+  .livecols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:14px}
+  .livesec{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+  .livesec h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .lcall{display:flex;align-items:center;gap:10px;font-size:17px;padding:7px 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  .lcall:last-child{border-bottom:none}
+  .lcall .lct{font-weight:700;min-width:56px}
+  .lcall.due .lct{color:var(--bad)}
+  .lcall .lcn{flex:1;min-width:130px}
+  .lcall .lcw{color:var(--muted);font-size:14px;margin-left:auto;white-space:nowrap}
+  .lset{font-size:15.5px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .lset:last-child{border-bottom:none}
+  .lset b.zero{color:var(--bad)}
+  .lset .lsrun{color:var(--warn);font-variant-numeric:tabular-nums}
+  #opMenu{z-index:110}
   /* списание имплантов */
   .implbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px}
   .implbox .implhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:6px}
@@ -349,11 +380,25 @@
   <div class="headact noprint">
     <label class="datelbl">День <input type="date" id="p_date" onchange="switchDay(this.value)"></label>
     <button class="btn primary" onclick="openWizard()">Быстрый план</button>
+    <button class="btn" onclick="openLive()" title="крупный экран на время работы: столы, вызовы, наборы, стерилизация">Идёт день</button>
     <button class="btn" onclick="newDay()">Новый день</button>
     <button class="btn" onclick="window.print()">Печать дня</button>
   </div>
   <div class="printhead" id="printHead"></div>
 </header>
+
+<!-- ИДЁТ ДЕНЬ: крупный диспетчерский экран для планшета -->
+<div id="liveDay" class="live noprint" style="display:none">
+  <div class="livehead">
+    <div><div class="liveclock" id="liveClock">—:—</div><div class="livedate" id="liveDate"></div></div>
+    <button class="btn" style="font-size:15px;padding:12px 18px" onclick="closeLive()">✕ Закрыть</button>
+  </div>
+  <div class="livetables" id="liveTables"></div>
+  <div class="livecols">
+    <div class="livesec"><h3>Вызвать в предоперационную</h3><div id="liveCalls"></div></div>
+    <div class="livesec"><h3>Наборы · стерилизация</h3><div id="liveSets"></div></div>
+  </div>
+</div>
 
 <!-- ТАП ПО ОПЕРАЦИИ НА ЛЕНТЕ: выполнена + импланты -->
 <div id="opMenu" class="wiz noprint" style="display:none" onclick="if(event.target===this)closeOpMenu()">
@@ -1868,6 +1913,74 @@ function renderDayNames(s, sched, order, uc){
   }
 }
 
+/* ---------- «идёт день»: крупный диспетчерский экран ---------- */
+let liveSched=[];      // операции показанного плана (для кнопок «выполнена» с экрана)
+let liveLastHtml='';
+function openLive(){ const e=$('liveDay'); if(!e) return; e.style.display='block'; liveLastHtml=''; renderLive(); }
+function closeLive(){ const e=$('liveDay'); if(e) e.style.display='none'; }
+function liveDone(i, withImpl){
+  const o=liveSched[i]; if(!o) return;
+  if(withImpl) closeLive();           // панель имплантов — под экраном, показать её
+  markDoneOp(o, withImpl);
+}
+function renderLive(){
+  const el=$('liveDay'); if(!el || el.style.display==='none') return;
+  const now=new Date();
+  $('liveClock').textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  $('liveDate').textContent=planDateStr();
+  const wall=(now.getHours()*60+now.getMinutes())-8*60 + now.getSeconds()/60;
+  const p=planForSlice(), s=p.s, N=stationCount(s);
+  liveSched=p.sched;
+  const nm=o=>nameForOp(o,p);
+  const doneSet={}; doneLog.forEach(d=>{ doneSet[d.type+'|'+d.tower+'|'+Math.round(d.end)]=1; });
+  const isDone=o=>doneSet[(OPS[o.type]?o.type:'custom')+'|'+o.tower+'|'+Math.round(o.end)];
+  // столы
+  let ht='';
+  for(let t=0;t<N;t++){
+    const onT=p.sched.filter(o=>o.tower===t).sort((a,b)=>a.start-b.start);
+    const cur=onT.find(o=>wall>=o.start && wall<o.end && !isDone(o));
+    const next=onT.find(o=>o.start>=wall || (cur&&o.start>=cur.end));
+    let body='';
+    if(cur){
+      const i=liveSched.indexOf(cur), left=Math.max(0,Math.round(cur.end-wall));
+      const pct=Math.min(100,Math.round((wall-cur.start)/(cur.end-cur.start)*100));
+      body+=`<div class="ltnow"><span class="dot" style="background:${opColor(cur)};width:14px;height:14px"></span> ${escHtml(nm(cur))}${cur._name?` <span class="muted">· ${escHtml(opLabel(cur))}</span>`:''}</div>`
+        +`<div class="ltsub">идёт с ${fmtTime(cur.start)} · осталось ~${left} мин (до ${fmtTime(cur.end)})</div>`
+        +`<div class="ltbar"><span style="width:${pct}%"></span></div>`
+        +`<div class="ltbtns"><button class="btn primary" onclick="liveDone(${i},true)">✓ Выполнена + импланты</button><button class="btn" onclick="liveDone(${i},false)">✓ Выполнена</button></div>`;
+    } else body+=`<div class="ltfree">свободен</div>`;
+    if(next && next!==cur) body+=`<div class="ltnext">далее <b>${fmtTime(next.start)}</b> — ${escHtml(nm(next))} <span class="muted">(${escHtml(opLabel(next))})</span></div>`;
+    else if(!cur && !next) body+=`<div class="ltsub">на сегодня всё</div>`;
+    ht+=`<div class="ltcard"><div class="ltt">Стол ${t+1}</div>${body}</div>`;
+  }
+  // вызовы в предоперационную: подача = начало индукции (для «на столе» — к началу занятия стола)
+  const calls=p.sched
+    .filter(o=>!isDone(o) && o.end>wall)
+    .map(o=>({o, call:Math.max(0,(o.anesStart!=null?o.anesStart:o.start))}))
+    .filter(x=>x.call<=wall+120 && x.o.start>wall-5)
+    .sort((a,b)=>a.call-b.call).slice(0,7);
+  $('liveCalls') && (el._calls=calls);
+  const callsHtml=calls.map(x=>{
+    const due=x.call<=wall;
+    const who=x.o._name?escHtml(x.o._name):'пациента';
+    return `<div class="lcall${due?' due':''}"><span class="lct">${due?'⏰':''} ${fmtTime(x.call)}</span><span class="lcn">подать ${who}</span><span class="lcw">${escHtml(opLabel(x.o))} · стол ${x.o.tower+1}${opMode(s,x.o)==='par'?' · индукция в зале':''}</span></div>`;
+  }).join('')||'<div class="note">ближайших подач нет</div>';
+  // наборы: что вскрывать под ближайшие операции + стерилизация
+  const nowMs=Date.now();
+  let setsHtml='';
+  const upcoming=p.sched.filter(o=>!isDone(o) && o.start>=wall-1).sort((a,b)=>a.start-b.start).slice(0,4);
+  upcoming.forEach(o=>{ setsHtml+=`<div class="lset">${fmtTime(o.start)} стол ${o.tower+1} → вскрыть <b>${setName(o.setCat,o.setIdx)}</b> <span class="muted">(${SET_SHORT[o.setCat]||o.setCat})</span>${opShaver(o)?' + шейвер':''}</div>`; });
+  STER_SETS.forEach(res=>{
+    const total=Math.round(num('set_'+res.cat)); if(!total) return;
+    let running=0, soonest=null;
+    for(let i=0;i<total;i++){ const end=setSterMap[res.cat+'-'+i]; if(end!=null&&end>nowMs){ running++; if(soonest==null||end<soonest) soonest=end; } }
+    const avail=total-running;
+    setsHtml+=`<div class="lset"><span class="dot" style="background:${res.color}"></span> ${res.label}: свободно <b class="${avail<=0?'zero':''}">${avail}</b>/${total}${running?` · <span class="lsrun">в стерилизации ${running}, ближайший к ${clockAt(soonest)}</span>`:''}</div>`;
+  });
+  const html=ht+'|'+callsHtml+'|'+setsHtml;
+  if(html!==liveLastHtml){ liveLastHtml=html; $('liveTables').innerHTML=ht; $('liveCalls').innerHTML=callsHtml; $('liveSets').innerHTML=setsHtml; }
+}
+
 /* ---------- тап по операции на ленте: отметить выполненной и списать импланты ---------- */
 function openOpMenu(mid){
   const o=lastDrawSched.find(x=>x._mid===mid); if(!o) return;
@@ -1882,6 +1995,9 @@ function closeOpMenu(){ const h=$('opMenu'); if(h) h.style.display='none'; }
 function markDoneFromPlan(withImpl){
   const host=$('opMenu'); const o=host&&lastDrawSched.find(x=>x._mid===host._mid);
   closeOpMenu(); if(!o) return;
+  markDoneOp(o, withImpl);
+}
+function markDoneOp(o, withImpl){
   const s=readState();
   const isStd=!!OPS[o.type];
   const entry={ id:Date.now()+'-'+Math.random().toString(36).slice(2,6),
@@ -2211,7 +2327,7 @@ const MANUAL_KEEP_IDS=['p_date','done_type','done_end','done_tower','blk_station
 document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor') || e.target.closest('#dayNamesRows')))){ manualOps=null; } render(); });
 // колесо мыши над числовым полем не должно менять значение, но и не выбивать фокус при прокрутке страницы
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
-setInterval(renderSter,1000);
+setInterval(()=>{ renderSter(); renderLive(); },1000);
 loadSettings();
 // приложение всегда открывается на СЕГОДНЯ: вчерашний план сохраняется под своей датой в неделе
 (function(){
