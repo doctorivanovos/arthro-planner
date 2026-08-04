@@ -4,7 +4,7 @@ const path = require('path');
 
 const ROOT = __dirname;
 const PORT = 8777;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
 http.createServer((req, res) => {
   let rel = decodeURIComponent(req.url.split('?')[0]);

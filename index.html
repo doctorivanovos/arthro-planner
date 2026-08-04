@@ -2,8 +2,16 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Планирование операционного дня · Клиника им. Н. И. Пирогова СПбГУ</title>
+<meta name="theme-color" content="#a23c28">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Артроплан">
 <style>
   :root{
     /* фирменный стиль СПбГУ: терракота + золото, тёплый медицинский белый */
@@ -349,6 +357,14 @@
     details.acc .acc-body{padding:6px 12px 14px}
     #countMode td:nth-child(2),#countMode th:nth-child(2){display:none}  /* колонка «Что нужно» — есть в настройках */
     .presetrow .presetnote{min-width:0;flex-basis:100%}
+    .btn-print{display:none}   /* печать с телефона — через срезы; кнопка экономит место в шапке */
+    .liveclock{font-size:40px}
+  }
+  /* PWA на iPhone: отступы под чёлку/индикатор в standalone-режиме */
+  @supports(padding:max(0px)){
+    header{padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,env(safe-area-inset-right))}
+    body{padding-bottom:env(safe-area-inset-bottom)}
+    .wiz,.live{padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(40px,env(safe-area-inset-bottom))}
   }
 
   @media print{
@@ -382,7 +398,7 @@
     <button class="btn primary" onclick="openWizard()">Быстрый план</button>
     <button class="btn" onclick="openLive()" title="крупный экран на время работы: столы, вызовы, наборы, стерилизация">Идёт день</button>
     <button class="btn" onclick="newDay()">Новый день</button>
-    <button class="btn" onclick="window.print()">Печать дня</button>
+    <button class="btn btn-print" onclick="window.print()">Печать дня</button>
   </div>
   <div class="printhead" id="printHead"></div>
 </header>
@@ -2339,6 +2355,8 @@ loadSettings();
 renderPresets();
 render();
 setupGanttDrag();
+// PWA: офлайн-кэш и установка на домашний экран
+if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 // быстрый план — стартовый экран: всплывает при ПЕРВОМ заходе за день (даже если
 // пропорции унаследованы со вчера — утром их надо подтвердить); закрыли — до завтра сам не появится
 (function(){
