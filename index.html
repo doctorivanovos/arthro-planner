@@ -1960,11 +1960,12 @@ function renderLive(){
     else if(!cur && !next) body+=`<div class="ltsub">на сегодня всё</div>`;
     ht+=`<div class="ltcard"><div class="ltt">Стол ${t+1}</div>${body}</div>`;
   }
-  // вызовы в предоперационную: подача = начало индукции (для «на столе» — к началу занятия стола)
+  // вызовы в предоперационную: подача = начало индукции; до 08:00 показываем утренние подачи от начала дня
+  const effWall=Math.max(wall, 0);
   const calls=p.sched
-    .filter(o=>!isDone(o) && o.end>wall)
+    .filter(o=>!isDone(o) && o.end>effWall)
     .map(o=>({o, call:Math.max(0,(o.anesStart!=null?o.anesStart:o.start))}))
-    .filter(x=>x.call<=wall+120 && x.o.start>wall-5)
+    .filter(x=>x.call<=effWall+120 && x.o.start>effWall-5)
     .sort((a,b)=>a.call-b.call).slice(0,7);
   $('liveCalls') && (el._calls=calls);
   const callsHtml=calls.map(x=>{
@@ -1975,7 +1976,7 @@ function renderLive(){
   // наборы: что вскрывать под ближайшие операции + стерилизация
   const nowMs=Date.now();
   let setsHtml='';
-  const upcoming=p.sched.filter(o=>!isDone(o) && o.start>=wall-1).sort((a,b)=>a.start-b.start).slice(0,4);
+  const upcoming=p.sched.filter(o=>!isDone(o) && o.start>=effWall-1).sort((a,b)=>a.start-b.start).slice(0,4);
   upcoming.forEach(o=>{ setsHtml+=`<div class="lset">${fmtTime(o.start)} стол ${o.tower+1} → вскрыть <b>${setName(o.setCat,o.setIdx)}</b> <span class="muted">(${SET_SHORT[o.setCat]||o.setCat})</span>${opShaver(o)?' + шейвер':''}</div>`; });
   STER_SETS.forEach(res=>{
     const total=Math.round(num('set_'+res.cat)); if(!total) return;
