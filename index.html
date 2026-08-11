@@ -187,6 +187,9 @@
   .crow .ckb.on{background:var(--ok);border-color:var(--ok);color:#fff}
   .crow.cdone{opacity:.62}
   .crow.cdone .cpat{text-decoration:line-through}
+  .crow .dragh{cursor:grab;color:var(--muted);font-size:17px;padding:4px 2px;flex:0 0 auto;touch-action:none;user-select:none}
+  .crow .dragh:active{cursor:grabbing;color:var(--accent)}
+  .sortable-ghost{opacity:.35;background:var(--panel2)}
   .crow .dnord{width:54px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 4px;font-size:14px;text-align:center;font-weight:600;cursor:pointer}
   /* списание имплантов */
   .implbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px}
@@ -381,6 +384,7 @@
     #countMode td:nth-child(2),#countMode th:nth-child(2){display:none}  /* колонка «Что нужно» — есть в настройках */
     .presetrow .presetnote{min-width:0;flex-basis:100%}
     .btn-print{display:none}   /* печать с телефона — через срезы; кнопка экономит место в шапке */
+    .kpi-extra{display:none}   /* на телефоне — три главные цифры, остальное в «Анализе дня» */
     .liveclock{font-size:40px}
     /* хирурги: карточкой — фамилия с кнопками в первой строке, навыки во второй */
     .surgrow{border-top:1px solid var(--line);padding-top:9px;margin:9px 0 0}
@@ -504,16 +508,6 @@
 
   <!-- ШАБЛОНЫ ДНЯ -->
   <div class="card presetbar">
-    <div class="presetrow">
-      <span class="preset-lbl">Шаблон дня</span>
-      <select class="blk" id="preset_sel"></select>
-      <button class="btn sm primary" onclick="loadPreset()">Загрузить</button>
-      <button class="btn sm" onclick="savePreset()">Сохранить текущее как…</button>
-      <button class="btn sm warn" onclick="deletePreset()">Удалить</button>
-      <button class="btn sm" onclick="exportAll()" title="Скачать файл со всеми настройками, шаблонами и таймерами — страховка от очистки браузера">Экспорт</button>
-      <button class="btn sm" onclick="importAll()" title="Восстановить всё из файла резервной копии">Импорт</button>
-      <span class="note presetnote" id="presetNote">Настройте день и сохраните как шаблон — «Плечевой день», «Обычный вторник» — потом загружайте одним кликом.</span>
-    </div>
     <div class="weekrow noprint" id="weekRow"></div>
   </div>
 
@@ -522,8 +516,8 @@
     <div class="kpis">
       <div class="kpi acc emph"><div class="num" id="kpi_total">—</div><div class="lbl">успею сегодня</div></div>
       <div class="kpi good"><div class="num" id="kpi_makespan">—</div><div class="lbl">закончу в</div></div>
-      <div class="kpi"><div class="num" id="kpi_max">—</div><div class="lbl">максимум за день</div></div>
-      <div class="kpi"><div class="num" id="kpi_tables">—</div><div class="lbl">столов занято</div></div>
+      <div class="kpi kpi-extra"><div class="num" id="kpi_max">—</div><div class="lbl">максимум за день</div></div>
+      <div class="kpi kpi-extra"><div class="num" id="kpi_tables">—</div><div class="lbl">столов занято</div></div>
       <div class="kpi" id="kpi_rej_card"><div class="num" id="kpi_rej">—</div><div class="lbl">не поместилось</div></div>
     </div>
     <div class="statusline" id="bottleneckNote"></div>
@@ -599,6 +593,24 @@
     </div>
   </details>
 
+
+  <!-- ШАБЛОНЫ ДНЯ И РЕЗЕРВНАЯ КОПИЯ -->
+  <details class="acc">
+    <summary>Шаблоны дня и резервная копия<span class="acc-hint">«Плечевой день» одним кликом · экспорт/импорт</span><span class="chev">▾</span></summary>
+    <div class="acc-body">
+      <div class="presetrow" style="margin-top:8px">
+        <select class="blk" id="preset_sel"></select>
+        <button class="btn sm primary" onclick="loadPreset()">Загрузить</button>
+        <button class="btn sm" onclick="savePreset()">Сохранить текущее как…</button>
+        <button class="btn sm warn" onclick="deletePreset()">Удалить</button>
+      </div>
+      <div class="note presetnote" id="presetNote">Настройте день и сохраните как шаблон — «Плечевой день», «Обычный вторник» — потом загружайте одним кликом.</div>
+      <div class="btnrow">
+        <button class="btn sm" onclick="exportAll()" title="Скачать файл со всеми настройками, шаблонами и таймерами — страховка от очистки браузера">Экспорт всех данных</button>
+        <button class="btn sm" onclick="importAll()" title="Восстановить всё из файла резервной копии">Импорт</button>
+      </div>
+    </div>
+  </details>
 
   <!-- ОСТАТОК ДНЯ -->
   <details class="acc">
@@ -726,6 +738,7 @@
 </div>
 </div>
 
+<script src="sortable.min.js"></script>
 <script>
 const OPS = {
   bankart:  {label:'Банкарт',     short:'Б',  sets:['shoulder'],       shaver:false, color:'var(--bankart)'},
@@ -979,12 +992,13 @@ function renderCards(s, sched){
       const ord=done?'<span class="cnum">✓</span>':`<select class="dnord" title="номер в очереди" onchange="cardMove('${c.id}',this.value)">${Array.from({length:nPlan},(_,n)=>`<option value="${n+1}"${n+1===p?' selected':''}>${n+1}</option>`).join('')}</select>`;
       const ni=(c.implants||[]).reduce((a,x)=>a+(+x.q||0),0);
       const impl=done?`<button class="implbtn${ni?' has':''}" onclick="openImplants('${c.id}')" title="списать импланты">${ni?'имп. '+ni:'+ имп.'}</button>`:'';
-      return `<div class="caserow crow${done?' cdone':''}" data-id="${c.id}">${ord}<span class="dot" style="background:${cardColor(c)}"></span>${typeSel}${custom}`
+      return `<div class="caserow crow${done?' cdone':''}" data-id="${c.id}"><span class="dragh" title="перетащите, чтобы изменить порядок">⠿</span>${ord}<span class="dot" style="background:${cardColor(c)}"></span>${typeSel}${custom}`
         +`<input type="text" class="cname cpat" placeholder="фамилия" value="${escHtml(c.name)}" oninput="cardSet('${c.id}','name',this.value)">`
         +`<span class="cfit" id="cfit-${c.id}"></span>${impl}`
         +`<button class="ckb${done?' on':''}" onclick="toggleCardDone('${c.id}')" title="${done?'выполнена — нажмите, чтобы вернуть в план':'отметить выполненной'}">✓</button>`
         +`<button class="x" onclick="removeCard('${c.id}')" title="убрать">×</button></div>`;
     }).join('')||'<div class="note">Операций пока нет — добавьте кнопками «+» выше или через «Быстрый план».</div>';
+    setupCardSortable();
   }
   cards.forEach(c=>{ const el=$('cfit-'+c.id); if(!el) return;
     if(c.status==='done'){ el.innerHTML=`<span class="pill ok">до ${minToClock(c.doneEnd||0)} · стол ${(c.tower||0)+1}</span>`; return; }
@@ -996,6 +1010,21 @@ function renderCards(s, sched){
       return `<span class="qa"><span class="dot" style="background:${OPS[t].color}"></span><span class="qan">${OPS[t].short}</span><button onclick="removeLastCard('${t}')" title="убрать одну">−</button><b>${n}</b><button onclick="addCard('${t}')" title="добавить">+</button></span>`; }).join('');
   }
   const ch=$('cardsHint'); if(ch){ const d=doneCards().length; ch.textContent=`${nPlan} в плане${d?` · ${d} выполнено`:''}`; }
+}
+function setupCardSortable(){
+  const host=$('cardList'); if(!host || typeof Sortable==='undefined') return;
+  if(host._sortable){ host._sortable.destroy(); host._sortable=null; }
+  if(!host.querySelector('.crow')) return;
+  host._sortable=new Sortable(host,{
+    handle:'.dragh', animation:150, delay:0,
+    onEnd:()=>{
+      const ids=[...host.querySelectorAll('.crow')].map(el=>el.getAttribute('data-id'));
+      const byId={}; cards.forEach(c=>byId[c.id]=c);
+      const next=ids.map(id=>byId[id]).filter(Boolean);
+      cards.forEach(c=>{ if(next.indexOf(c)<0) next.push(c); });
+      cards=next; cardsRenderedSig=null; manualOps=null; saveSettings(); render();
+    }
+  });
 }
 function toggleDone(v){ useDoneLog=v; saveSettings(); render(); }
 

@@ -1,7 +1,7 @@
 // Артроплан: офлайн-кэш. Стратегия «сеть — прежде всего»: онлайн всегда свежая
 // версия, без сети — последняя закэшированная.
-const CACHE = 'arthro-v1';
-const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'arthro-v2';
+const ASSETS = ['./', './index.html', './manifest.json', './sortable.min.js', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
