@@ -174,6 +174,20 @@
   .lset b.zero{color:var(--bad)}
   .lset .lsrun{color:var(--warn);font-variant-numeric:tabular-nums}
   #opMenu{z-index:110}
+  /* доска дня: быстрые добавления и карточки */
+  .addrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .qa{display:inline-flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:5px 7px 5px 11px;font-size:13px}
+  .qa .qan{font-weight:600}
+  .qa button{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--panel);font-size:16px;line-height:1;cursor:pointer;color:var(--txt)}
+  .qa button:active{background:var(--accent);color:#fff}
+  .qa b{min-width:16px;text-align:center;font-variant-numeric:tabular-nums}
+  .crow .cpat{flex:1 1 110px;min-width:100px}
+  .crow .clbl{flex:1 1 100px;min-width:90px}
+  .crow .ckb{flex:0 0 auto;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:15px;cursor:pointer;line-height:1}
+  .crow .ckb.on{background:var(--ok);border-color:var(--ok);color:#fff}
+  .crow.cdone{opacity:.62}
+  .crow.cdone .cpat{text-decoration:line-through}
+  .crow .dnord{width:54px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 4px;font-size:14px;text-align:center;font-weight:600;cursor:pointer}
   /* списание имплантов */
   .implbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px}
   .implbox .implhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:6px}
@@ -200,7 +214,6 @@
   .implfree{margin-top:10px}
   .implfree summary{font-size:12.5px;color:var(--muted)}
   /* пациенты дня под расписанием */
-  #dayNamesWrap{margin-top:8px}
   .dnrow{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
   .dnrow .ord{width:20px;text-align:center;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
   .dnrow .dnord{width:56px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 6px;font-size:14px;text-align:center;font-weight:600;cursor:pointer}
@@ -523,50 +536,44 @@
     <div class="gantt" id="gantt"></div>
     <div class="legend" id="legend"></div>
     <div class="lanesum" id="laneSummary"></div>
-    <details class="noprint" id="dayNamesWrap"><summary>Пациенты дня — номера и фамилии</summary>
-      <div id="dayNamesRows"></div>
-      <div class="note">Фамилия привязывается к операции и сразу видна на ленте, в срезах для бригады и подставляется при списании имплантов.</div>
-    </details>
     <details><summary>Как читать диаграмму</summary>
       <div class="note">Штриховка в начале блока = анестезия на столе (стол занят: ПКС — спинальная, мениск — в/в). Значок <b>∥</b> на блоке = анестезия шла параллельно в отдельном зале, стол ею не занят (плечевые: Латарже, Банкарт, манжета). После операции набор, оптика и шейвер уходят на стерилизацию 1,5 ч. Тёмная косая штриховка по краям дорожки = стол ещё/уже не работает. Линия и метка «сейчас» появляются в режиме остатка дня.</div>
     </details>
   </div>
 
-  <!-- ЧТО ОПЕРИРУЮ: основной ввод, на виду -->
+  <!-- ДОСКА ДНЯ: одна сущность — карточка операции (время·пациент·тип·статус), как на доске оперблока -->
   <div class="card">
-    <h2>Что оперирую сегодня</h2>
-    <div class="row" style="margin:0 0 10px"><label>Поимённо — список пациентов <span class="sub">имена идут в расписание и на печать для бригады</span></label><input type="checkbox" id="use_cases" onchange="toggleCases(this.checked)"></div>
-
-    <div id="countMode">
-    <table>
-      <thead><tr><th>Операция</th><th>Что нужно</th><th class="r">Запланировать</th><th class="r">Влезает</th></tr></thead>
-      <tbody>
-        <tr><td><span class="dot" style="background:var(--bankart)"></span>Банкарт</td><td class="muted">плечо + ВАПР</td><td class="r"><input type="number" id="m_bankart" value="2" min="0"></td><td class="r" id="fit_bankart">—</td></tr>
-        <tr><td><span class="dot" style="background:var(--cuff)"></span>Шов манжеты</td><td class="muted">плечо + ВАПР</td><td class="r"><input type="number" id="m_cuff" value="2" min="0"></td><td class="r" id="fit_cuff">—</td></tr>
-        <tr><td><span class="dot" style="background:var(--acl)"></span>ПКС</td><td class="muted">ПКС + шейвер + ВАПР</td><td class="r"><input type="number" id="m_acl" value="3" min="0"></td><td class="r" id="fit_acl">—</td></tr>
-        <tr><td><span class="dot" style="background:var(--meniscus)"></span>Мениск</td><td class="muted">мениск/ПКС-набор</td><td class="r"><input type="number" id="m_meniscus" value="2" min="0"></td><td class="r" id="fit_meniscus">—</td></tr>
-        <tr><td><span class="dot" style="background:var(--latarjet)"></span>Латарже</td><td class="muted">только набор Латарже</td><td class="r"><input type="number" id="m_latarjet" value="1" min="0"></td><td class="r" id="fit_latarjet">—</td></tr>
-      </tbody>
-    </table>
-    <div id="customOps"></div>
-    <div class="btnrow">
-      <button class="btn sm" onclick="addCustomOp()">+ Своя операция (текстом)</button>
-    </div>
-    <div class="btnrow">
+    <h2>Операции дня <span class="soft" id="cardsHint"></span></h2>
+    <div class="addrow" id="quickAdd"></div>
+    <div id="cardList"></div>
+    <details class="implfree" style="margin-top:10px"><summary>Своя операция — не из списка</summary>
+      <div class="blkrow" style="margin-top:8px">
+        <input type="text" class="cname" id="cadd_name" placeholder="Название операции" style="flex:1 1 150px;min-width:130px" onkeydown="if(event.key==='Enter')addCustomCard()">
+        <select class="blk" id="cadd_joint"><option value="shoulder">Плечо</option><option value="knee" selected>Колено</option><option value="ankle">Голеностоп</option></select>
+        <input type="number" class="cdur" id="cadd_dur" value="45" min="5" step="5" title="длительность, мин">
+        <button class="btn sm primary" onclick="addCustomCard()">Добавить</button>
+      </div>
+    </details>
+    <div class="btnrow" style="margin-top:12px">
       <button class="btn primary" onclick="maximize()">Максимум в этих пропорциях</button>
       <button class="btn" onclick="loadAbsoluteMax()" title="Самые короткие операции (мениск) — максимальное число, но клинически это мениск-день">Абс. максимум (мениск-день)</button>
-      <button class="btn" onclick="setMix(0)">Обнулить</button>
+      <button class="btn" onclick="clearPlanCards()">Обнулить</button>
     </div>
-    </div>
-
-    <div id="casesMode" style="display:none">
-      <div id="caseList"></div>
-      <div class="btnrow">
-        <button class="btn sm primary" onclick="addCase()">+ Добавить пациента</button>
-        <button class="btn sm" onclick="casesBestOrder()">Лучший порядок</button>
-        <button class="btn sm" onclick="clearCases()">Очистить список</button>
-      </div>
-      <div class="note" id="caseUnfit"></div>
+    <div class="implbox" id="implEditor" style="display:none">
+      <div class="implhead"><b id="implTitle"></b><button class="x" onclick="closeImplants()" title="закрыть">×</button></div>
+      <div id="implTpl"></div>
+      <div class="impllist" id="implItems"></div>
+      <details class="implfree"><summary>Другой имплант (нет в списке)</summary>
+        <div class="blkrow" style="margin-top:8px">
+          <input type="text" class="cname" id="impl_name" list="implNames" placeholder="Название" style="flex:1 1 120px;min-width:110px" onkeydown="if(event.key==='Enter')implAdd()">
+          <input type="text" class="cname" id="impl_mfr" list="implMfrs" placeholder="Производитель" style="flex:0 1 130px">
+          <input type="text" class="cname" id="impl_size" placeholder="Размер" style="flex:0 1 80px">
+          <span class="sep">×</span><input type="number" class="cdur" id="impl_qty" value="1" min="1" step="1" title="сколько штук">
+          <button class="btn sm primary" onclick="implAdd()">Списать</button>
+        </div>
+      </details>
+      <datalist id="implNames"></datalist><datalist id="implMfrs"></datalist>
+      <div class="note">Нажмите имплант из шаблона операции — он спишется, останется уточнить размер и количество. Сводка дня — «Списание имплантов» в «Срезах для бригады».</div>
     </div>
   </div>
 
@@ -598,36 +605,8 @@
     <summary>Уже сделано — планирую остаток дня<span class="acc-hint" id="accDoneHint"></span><span class="chev">▾</span></summary>
     <div class="acc-body">
       <div class="row"><label>Считать только остаток дня <span class="sub">с текущего момента, а не с 08:00</span></label><input type="checkbox" id="use_done" onchange="toggleDone(this.checked)"></div>
-      <div class="btnrow"><button class="btn sm primary" onclick="nowByClock()">Сейчас = по часам</button></div>
-      <h3>Журнал выполненного</h3>
-      <div class="blkrow">
-        <select class="blk" id="done_type"></select>
-        <span class="sep">закончил в</span><input type="time" id="done_end" value="10:00" step="300">
-        <select class="blk" id="done_tower"></select>
-        <button class="btn sm primary" onclick="addDone()">Добавить</button>
-      </div>
-      <div class="chips" id="doneChips"></div>
-      <div class="implbox" id="implEditor" style="display:none">
-        <div class="implhead"><b id="implTitle"></b><button class="x" onclick="closeImplants()" title="закрыть">×</button></div>
-        <div class="blkrow">
-          <input type="text" class="cname" id="impl_pat" placeholder="Пациент (фамилия)" oninput="implPat(this.value)" style="flex:1 1 170px">
-        </div>
-        <div id="implTpl"></div>
-        <div class="impllist" id="implItems"></div>
-        <details class="implfree"><summary>Другой имплант (нет в списке)</summary>
-          <div class="blkrow" style="margin-top:8px">
-            <input type="text" class="cname" id="impl_name" list="implNames" placeholder="Название" style="flex:1 1 120px;min-width:110px" onkeydown="if(event.key==='Enter')implAdd()">
-            <input type="text" class="cname" id="impl_mfr" list="implMfrs" placeholder="Производитель" style="flex:0 1 130px">
-            <input type="text" class="cname" id="impl_size" placeholder="Размер" style="flex:0 1 80px">
-            <span class="sep">×</span><input type="number" class="cdur" id="impl_qty" value="1" min="1" step="1" title="сколько штук">
-            <button class="btn sm primary" onclick="implAdd()">Списать</button>
-          </div>
-        </details>
-        <datalist id="implNames"></datalist><datalist id="implMfrs"></datalist>
-        <div class="note">Нажмите имплант из шаблона операции — он спишется, останется уточнить размер и количество. Сводка дня — кнопка «Списание имплантов» в «Срезах для бригады».</div>
-      </div>
-      <div class="btnrow" id="doneClearRow" style="display:none"><button class="btn sm" onclick="clearDone()">Очистить журнал</button></div>
       <div class="note" id="doneNote"></div>
+      <div class="note">Выполненные операции отмечаются галочкой в «Операциях дня» или тапом по блоку на ленте — они уходят из плана, а их наборы считаются в стерилизации.</div>
     </div>
   </details>
 
@@ -801,11 +780,10 @@ function closeWizard(){ const w=$('wizard'); if(w) w.style.display='none'; try{ 
 function wizDate(v){ if(v) gotoDay(v); }
 function wizStep(id,d){
   const el=$(id); if(!el) return;
-  const min=(id==='p_tables')?1:0;
-  el.value=Math.max(min, Math.round((parseFloat(el.value)||0)+d));
-  if(id.indexOf('m_')===0 && useCases){ useCases=false; const c=$('use_cases'); if(c)c.checked=false; }
+  el.value=Math.max((id==='p_tables')?1:0, Math.round((parseFloat(el.value)||0)+d));
   manualOps=null; saveSettings(); render();
 }
+function wizCardStep(t,d){ if(d>0) addCard(t); else removeLastCard(t); }
 function wizSurgToggle(id){ const g=surgeonList.find(x=>x.id===id); if(!g) return; g.off=!g.off; manualOps=null; surgRenderedIds=null; saveSettings(); render(); }
 let wizSurgEdit=false;   // режим «Убрать…» в мастере: чипы с крестиками
 function wizAddSurgeon(){
@@ -822,14 +800,11 @@ function wizRemoveSurgeon(id){
   if(surgeonList.length<=1) wizSurgEdit=false;
   removeSurgeon(id);
 }
-function wizCustomStep(id,d){ const c=customList.find(x=>x.id===id); if(!c) return; c.count=Math.max(0,Math.round((c.count||0)+d)); customRenderedIds=null; manualOps=null; saveSettings(); render(); }
 function wizAddCustom(){
   const n=$('wizc_name').value.trim(); if(!n){ $('wizc_name').focus(); return; }
-  const dur=Math.max(5,Math.round(parseFloat($('wizc_dur').value)||45));
-  const j=$('wizc_set').value;
-  customList.push({id:'u'+Date.now()+Math.random().toString(36).slice(2,5), label:n, joint:j, setCat:(JOINTS[j]||JOINTS.knee).cat, dur, count:1});
+  cards.push({id:newCardId(), type:'custom', label:n, joint:$('wizc_set').value, dur:Math.max(5,Math.round(parseFloat($('wizc_dur').value)||45)), name:'', status:'plan', doneEnd:null, tower:0, implants:[]});
   $('wizc_name').value='';
-  customRenderedIds=null; manualOps=null; saveSettings(); render();
+  manualOps=null; saveSettings(); render();
 }
 function renderWizard(s, r){
   const w=$('wizard'); if(!w || w.style.display==='none') return;
@@ -845,14 +820,9 @@ function renderWizard(s, r){
       : `<button class="wchip${g.off?'':' on'}" onclick="wizSurgToggle('${g.id}')">${escHtml(surgeonName(g,i))}</button>`).join('')
     || '<span class="note" style="margin:0">хирургов нет — впишите фамилию ниже и нажмите «Добавить»</span>';
   const web=$('wizSurgEditBtn'); if(web) web.textContent=wizSurgEdit?'Готово':'Убрать…';
-  // поимённый режим: расчёт идёт по списку пациентов — счётчики скрываем, чтобы цифры не расходились
-  $('wizOps').innerHTML = useCases
-    ? `<div class="note" style="margin:0 0 8px">Включён <b>поимённый список пациентов</b> (${caseList.length}) — расчёт ниже идёт по нему. Список редактируется в полном экране, в блоке «Что оперирую сегодня».</div>`
-      + (caseList.length?`<div class="note" style="margin:0 0 8px">${caseList.map((c,i)=>`${i+1}. ${escHtml(caseLabel(c))}`).join(' · ')}</div>`:'')
-      + `<button class="btn sm" onclick="toggleCases(false);const c=$('use_cases');if(c)c.checked=false;">Планировать числами (список сохранится)</button>`
-    : TYPES.map(t=>`<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizStep('m_${t}',-1)">−</button><b>${Math.round(num('m_'+t))}</b><button onclick="wizStep('m_${t}',1)">+</button></div></div>`).join('')
-      + customList.map(c=>`<div class="wizoprow"><span class="dot" style="background:var(--${c.setCat||'acl'})"></span><span class="nm">${escHtml(c.label||'Операция')} <span class="muted" style="font-size:12px;white-space:nowrap">${Math.round(c.dur||45)} мин · ${JOINTS[jointOf(c)].label.toLowerCase()}</span></span><div class="wizstep"><button onclick="wizCustomStep('${c.id}',-1)">−</button><b>${Math.max(0,Math.round(c.count||0))}</b><button onclick="wizCustomStep('${c.id}',1)">+</button></div><button class="wx" onclick="removeCustomOp('${c.id}')" title="убрать операцию из списка">×</button></div>`).join('');
-  const wca=$('wizCustomAdd'); if(wca) wca.style.display=useCases?'none':'';
+  $('wizOps').innerHTML = TYPES.map(t=>{ const n=cards.filter(c=>c.type===t&&c.status!=='done').length;
+      return `<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizCardStep('${t}',-1)">−</button><b>${n}</b><button onclick="wizCardStep('${t}',1)">+</button></div></div>`; }).join('')
+    + planCards().filter(c=>c.type==='custom').map(c=>`<div class="wizoprow"><span class="dot" style="background:${cardColor(c)}"></span><span class="nm">${escHtml(cardLabel(c))} <span class="muted" style="font-size:12px;white-space:nowrap">${Math.round(c.dur||45)} мин · ${JOINTS[(c.joint&&JOINTS[c.joint])?c.joint:'knee'].label.toLowerCase()}</span></span><button class="wx" onclick="removeCard('${c.id}')" title="убрать операцию">×</button></div>`).join('');
   // живой результат: сколько влезает, во сколько закончим, очередь по столам
   const total=r.sched.length, rej=Object.values(r.rejected).reduce((a,b)=>a+b,0);
   const mk=r.sched.reduce((m,o)=>Math.max(m,o.end),0);
@@ -864,7 +834,7 @@ function renderWizard(s, r){
   let q='';
   for(let t=0;t<N;t++){
     const onT=r.sched.filter(o=>o.tower===t).sort((a,b)=>a.start-b.start);
-    if(onT.length) q+=`Стол ${t+1}:  `+onT.map(o=>`${fmtTime(o.start)} ${(useCases&&caseList[o.oidx])?caseLabel(caseList[o.oidx]):opLabel(o)}`).join(' → ')+'\n';
+    if(onT.length) q+=`Стол ${t+1}:  `+onT.map(o=>`${fmtTime(o.start)} ${(o._card&&o._card.name&&o._card.name.trim())||opLabel(o)}`).join(' → ')+'\n';
   }
   $('wizRes').innerHTML=head+(q?`<div class="q">${escHtml(q)}</div>`:'');
 }
@@ -877,17 +847,13 @@ const escHtml = x => String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&l
 let tableWin=[];          // [{from,to}] минуты от 08:00; источник правды для окон столов
 let tableWinRenderedN=-1; // чтобы не перестраивать инпуты на каждый render (сохранить фокус)
 
-/* ---------- остаток дня: журнал уже выполненного ---------- */
-let doneLog=[];           // [{id,type,end,tower}] уже сделанные операции (end — минуты от 08:00)
 let useDoneLog=false;     // режим «планирую только остаток дня»
 let manualOps=null;       // ручное расписание (перетаскивание): null = авто; иначе [{id,type,tower,start}]
-let caseList=[];          // поимённый список пациентов: [{id,name,type,side}]
-let useCases=false;       // режим «поимённо» вместо абстрактных чисел
-let lastPlan=null;        // последнее авто-расписание для «срезов бригады»: {sched,s,useCases}
+let lastPlan=null;        // последнее авто-расписание для «срезов бригады»: {sched,s}
 let curSlice='';          // текущий показанный срез (текст)
 /* ---------- срезы для бригады: каждому участнику — его часть плана ---------- */
-function planForSlice(){ if(lastPlan&&lastPlan.sched) return lastPlan; const s=readState(); const uc=useCases&&caseList.length>0; const order=uc?caseList.map(c=>c.type):buildOrderFull(s); return {sched:simulate(s,order).sched, s, useCases:uc}; }
-function nameForOp(o,p){ return o._name || ((p.useCases&&caseList[o.oidx])?caseLabel(caseList[o.oidx]):opLabel(o)); }
+function planForSlice(){ if(lastPlan&&lastPlan.sched) return lastPlan; const s=readState(); const order=planCards().map(c=>cardSpecOf(s,c)); return {sched:simulate(s,order).sched, s}; }
+function nameForOp(o,p){ return o._name || (o._card&&o._card.name&&o._card.name.trim()) || opLabel(o); }
 let curSliceRole=null;   // какой срez сейчас показан — чтобы обновлять при смене плана
 function assignSets(s, ops){   // назначить наборы для ручной раскладки (как simulate) — для срезов ЦСО
   const P={shoulder:pool(s.inv.sets.shoulder),acl:pool(s.inv.sets.acl),meniscus:pool(s.inv.sets.meniscus),latarjet:pool(s.inv.sets.latarjet)};
@@ -911,85 +877,127 @@ function shareSlice(){
 }
 function copySlice(){ if(!curSlice) return; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(curSlice).then(()=>{$('sliceNote').textContent='Скопировано в буфер.';},()=>{$('sliceNote').textContent='Не удалось — выделите текст вручную.';}); } else { $('sliceNote').textContent='Выделите текст и скопируйте вручную.'; } }
 function printSlice(){ if(!curSlice) return; const w=window.open('','_blank'); if(!w){ $('sliceNote').textContent='Разрешите всплывающие окна для печати.'; return; } const esc=curSlice.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); w.document.write('<!DOCTYPE html><meta charset="UTF-8"><title>Срез для бригады</title><pre style="font:14px/1.6 -apple-system,Segoe UI,Arial;padding:18px;white-space:pre-wrap">'+esc+'</pre>'); w.document.close(); w.focus(); setTimeout(()=>{try{w.print();}catch(e){}},150); }
-function caseLabel(c){ const opl=(c.type==='custom')?((c.label&&c.label.trim())||'Операция'):(OPS[c.type]?OPS[c.type].label:'Операция'); return ((c.name&&c.name.trim())?c.name.trim():opl)+(c.side?' ('+c.side+')':''); }
-// описание операции для конкретного пациента: своя длительность; для «Другое» — название + набор + авто-анестезия
-function caseSpec(c){
-  if(c.type==='custom'){ const cat=c.setCat||'acl', par=(cat==='shoulder'||cat==='latarjet');
-    return {type:'custom', skillType:SKILL_BY_CAT[cat], dur:(c.dur!=null&&isFinite(+c.dur)&&+c.dur>0)?+c.dur:45, anes:par?15:(cat==='meniscus'?2:12), anesMode:par?'par':'room', sets:[cat], shaver:cat==='acl', label:(c.label&&c.label.trim())||'Операция', color:'var(--'+cat+')'}; }
-  return {type:c.type, dur:(c.dur!=null&&isFinite(+c.dur)&&+c.dur>0)?+c.dur:undefined};   // только длительность-оверрайд; остальное opSpec возьмёт из типа
+/* ---------- карточки операций: единая сущность доски дня ---------- */
+let cards=[];             // [{id,type,label,joint,dur,name,status:'plan'|'done',doneEnd,tower,implants}]
+let cardsRenderedSig=null;
+let lastPlanSched=[];     // расписание последнего расчёта (для времени «выполнена» и тап-меню)
+const newCardId=()=>'k'+Date.now()+Math.random().toString(36).slice(2,5);
+function sanitizeCards(arr){
+  return (arr||[]).map(x=>({
+    id:x.id||newCardId(),
+    type:(OPS[x.type]||x.type==='custom')?x.type:'bankart',
+    label:typeof x.label==='string'?x.label:'',
+    joint:(x.joint&&JOINTS[x.joint])?x.joint:'knee',
+    dur:(isFinite(+x.dur)&&+x.dur>0)?Math.round(+x.dur):null,
+    name:typeof x.name==='string'?x.name:'',
+    status:x.status==='done'?'done':'plan',
+    doneEnd:isFinite(+x.doneEnd)?+x.doneEnd:null,
+    tower:isFinite(+x.tower)?Math.max(0,Math.round(+x.tower)):0,
+    implants:Array.isArray(x.implants)?x.implants:[],
+  }));
 }
-function toggleCases(v){ useCases=v; manualOps=null; saveSettings(); render(); }
-function addCase(){ caseList.push({id:'c'+Date.now()+Math.random().toString(36).slice(2,5), name:'', type:'bankart', side:''}); useCases=true; const c=$('use_cases'); if(c)c.checked=true; manualOps=null; saveSettings(); render(); const f=document.querySelectorAll('#caseList .cname'); if(f.length) f[f.length-1].focus(); }
-function removeCase(id){ caseList=caseList.filter(c=>c.id!==id); manualOps=null; saveSettings(); render(); }
-function clearCases(){ caseList=[]; manualOps=null; saveSettings(); render(); }
-function caseSet(id,f,v){
-  const c=caseList.find(x=>x.id===id); if(!c) return;
-  if(f==='dur'){ c.dur=(v===''||!isFinite(+v))?null:Math.max(5,Math.round(+v)); }
+const planCards=()=>cards.filter(c=>c.status!=='done');
+const doneCards=()=>cards.filter(c=>c.status==='done');
+function cardLabel(c){ return c.type==='custom' ? ((c.label&&c.label.trim())||'Операция') : (OPS[c.type]?OPS[c.type].label:c.type); }
+function cardColor(c){ return c.type==='custom' ? ('var(--'+JOINTS[(c.joint&&JOINTS[c.joint])?c.joint:'knee'].cat+')') : (OPS[c.type]?OPS[c.type].color:'var(--tool)'); }
+function cardSpecOf(s,c){
+  if(c.type==='custom'){
+    const j=(c.joint&&JOINTS[c.joint])?c.joint:'knee', cat=JOINTS[j].cat, par=(j==='shoulder');
+    return {type:'custom', _card:c, skillType:SKILL_BY_CAT[cat], dur:(c.dur>0?+c.dur:45),
+      anes:par?15:12, anesMode:par?'par':'room', sets:[cat], shaver:cat==='acl',
+      label:cardLabel(c), color:'var(--'+cat+')'};
+  }
+  return {type:c.type, _card:c, dur:(c.dur>0?+c.dur:null)};   // остальное opSpec возьмёт из типа
+}
+// «журнал выполненного» для движка/ленты — производный от карточек-«выполнена»
+function doneLogView(){ return doneCards().map(c=>({id:c.id, type:(OPS[c.type]?c.type:'custom'), end:(c.doneEnd!=null?c.doneEnd:0), tower:c.tower||0, lbl:(OPS[c.type]?undefined:cardLabel(c)), pat:c.name, implants:c.implants})); }
+function addCard(type){ cards.push({id:newCardId(), type, label:'', joint:'knee', dur:null, name:'', status:'plan', doneEnd:null, tower:0, implants:[]}); manualOps=null; saveSettings(); render(); }
+function removeLastCard(type){
+  for(let i=cards.length-1;i>=0;i--){ const c=cards[i];
+    if(c.type===type && c.status==='plan' && !(c.name&&c.name.trim())){ cards.splice(i,1); manualOps=null; saveSettings(); render(); return; } }
+  for(let i=cards.length-1;i>=0;i--){ const c=cards[i];
+    if(c.type===type && c.status==='plan'){ if(confirm('Убрать «'+cardLabel(c)+(c.name?' — '+c.name:'')+'» из плана?')){ cards.splice(i,1); manualOps=null; saveSettings(); render(); } return; } }
+}
+function addCustomCard(){
+  const n=$('cadd_name').value.trim(); if(!n){ $('cadd_name').focus(); return; }
+  cards.push({id:newCardId(), type:'custom', label:n, joint:$('cadd_joint').value, dur:Math.max(5,Math.round(parseFloat($('cadd_dur').value)||45)), name:'', status:'plan', doneEnd:null, tower:0, implants:[]});
+  $('cadd_name').value='';
+  manualOps=null; saveSettings(); render();
+}
+function removeCard(id){
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  if(((c.name&&c.name.trim())||(c.implants||[]).length) && !confirm('Убрать «'+cardLabel(c)+(c.name?' — '+c.name:'')+'»?')) return;
+  if(implEditId===id) closeImplants(true);
+  cards=cards.filter(x=>x.id!==id); manualOps=null; saveSettings(); render();
+}
+function cardSet(id,f,v){
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  if(f==='dur') c.dur=(v===''||!isFinite(+v))?null:Math.max(5,Math.round(+v));
+  else if(f==='type'){ c.type=(OPS[v]||v==='custom')?v:c.type; cardsRenderedSig=null; }
   else c[f]=v;
-  if(f==='type' && v==='custom'){ if(c.label==null)c.label=''; if(!c.setCat)c.setCat='acl'; if(c.dur==null)c.dur=45; }
-  if(f==='type' || f==='setCat'){ const row=document.querySelector('.caserow[data-id="'+id+'"]'); const dot=row&&row.querySelector('.dot');
-    if(dot){ const cat=(c.type==='custom')?(c.setCat||'acl'):null; dot.style.background = cat?('var(--'+cat+')'):(OPS[c.type]?OPS[c.type].color:'var(--tool)'); } }
-  if(f==='type'){ const di=document.querySelector('.caserow[data-id="'+id+'"] .cdur'); if(di) di.value=(c.dur!=null)?c.dur:(c.type==='custom'?45:(TYPES.indexOf(c.type)>=0?Math.round(num('d_'+c.type)):'')); }
-  manualOps=null; /* остальное перерисует глобальный input-слушатель */
+  if(f!=='name'&&f!=='label') manualOps=null;   // фамилия/название не меняют раскладку
+  /* перерисует глобальный input-слушатель */
 }
-function caseRowHTML(cs,i){
-  const esc=x=>(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
-  const isC=cs.type==='custom';
-  const dotColor=isC?('var(--'+(cs.setCat||'acl')+')'):(OPS[cs.type]?OPS[cs.type].color:'var(--tool)');
-  const types=TYPES.map(t=>`<option value="${t}"${t===cs.type?' selected':''}>${OPS[t].label}</option>`).join('')+`<option value="custom"${isC?' selected':''}>Другое…</option>`;
-  const sides=['','прав','лев'].map(sd=>`<option value="${sd}"${sd===cs.side?' selected':''}>${sd||'сторона'}</option>`).join('');
-  const pools=[['shoulder','плечо'],['acl','ПКС'],['meniscus','мениск'],['latarjet','Латарже']].map(([v,l])=>`<option value="${v}"${(cs.setCat||'acl')===v?' selected':''}>${l}</option>`).join('');
-  const custom=isC?`<input type="text" class="cname ccustom" placeholder="Название операции" value="${esc(cs.label||'')}" oninput="caseSet('${cs.id}','label',this.value)"><select class="blk ccustom" title="Какой набор нужен" onchange="caseSet('${cs.id}','setCat',this.value);render()">${pools}</select>`:'';
-  const durShown=(cs.dur!=null)?cs.dur:(isC?45:(TYPES.indexOf(cs.type)>=0?Math.round(num('d_'+cs.type)):''));
-  return `<div class="caserow" data-id="${cs.id}"><span class="cnum">${i+1}</span><span class="dot" style="background:${dotColor}"></span>`
-    +`<input type="text" class="cname" placeholder="Фамилия пациента" value="${esc(cs.name)}" oninput="caseSet('${cs.id}','name',this.value)">`
-    +`<select class="blk" onchange="caseSet('${cs.id}','type',this.value);render()">${types}</select>`
-    +custom
-    +`<select class="blk" onchange="caseSet('${cs.id}','side',this.value);render()">${sides}</select>`
-    +`<input type="number" class="cdur" min="5" step="5" placeholder="мин" title="Длительность этой операции, мин" value="${durShown}" oninput="caseSet('${cs.id}','dur',this.value)">`
-    +`<span class="cfit" id="cfit-${cs.id}"></span><button class="x" onclick="removeCase('${cs.id}')" title="убрать">×</button></div>`;
+function cardMove(id,pos){
+  const from=cards.findIndex(x=>x.id===id); if(from<0) return;
+  const c=cards.splice(from,1)[0];
+  // позиция задаётся среди плановых; выполненные остаются на своих местах массива
+  let target=Math.max(1,Math.round(+pos)||1), idx=0, seen=0;
+  while(idx<cards.length && seen<target-1){ if(cards[idx].status!=='done') seen++; idx++; }
+  cards.splice(idx,0,c);
+  manualOps=null; saveSettings(); render();
 }
-function renderCases(s, sched, on){
-  const cm=$('countMode'), csm=$('casesMode'); if(cm) cm.style.display=on?'none':''; if(csm) csm.style.display=on?'':'none';
-  const host=$('caseList'); if(!host) return;
-  const rows=host.querySelectorAll('.caserow');
-  const orderChanged = rows.length===caseList.length && [...rows].some((rw,i)=>rw.getAttribute('data-id')!==caseList[i].id);   // «Лучший порядок» переставил
-  const customMismatch = rows.length===caseList.length && [...rows].some((rw,i)=>(caseList[i].type==='custom')!==!!rw.querySelector('.ccustom'));   // переключили на «Другое»/обратно
-  if(rows.length!==caseList.length || orderChanged || customMismatch || (caseList.length===0 && !host.querySelector('.note')))
-    host.innerHTML = caseList.length? caseList.map((cs,i)=>caseRowHTML(cs,i)).join('') : '<div class="note">Пациентов пока нет — нажмите «+ Добавить пациента».</div>';
-  if(!on) return;
-  const byIdx={}; sched.forEach(o=>{ byIdx[o.oidx]=o; });
-  let unfit=0;
-  caseList.forEach((cs,i)=>{ const el=$('cfit-'+cs.id); if(!el) return; const o=byIdx[i];
-    if(o) el.innerHTML=`<span class="pill ok">${fmtTime(o.start)} · стол ${o.tower+1}</span>`;
-    else { el.innerHTML='<span class="pill bad">не влезает</span>'; unfit++; } });
-  $('caseUnfit').innerHTML = caseList.length ? (unfit
-    ? `<b style="color:var(--bad)">Не влезает: ${unfit} из ${caseList.length}.</b> Уберите часть, добавьте ресурсы или растяните день/окна столов.`
-    : `<b style="color:var(--ok)">Все ${caseList.length} пациентов помещаются.</b> Имена — в расписании ниже и на печати.`) : '';
+function clearPlanCards(){
+  if(planCards().length && !confirm('Убрать все незавершённые операции из плана?')) return;
+  cards=doneCards(); manualOps=null; saveSettings(); render();
 }
-function casesBestOrder(){
-  if(!caseList.length) return; const s=readState();
-  const wc=c=>{ const sp=caseSpec(c), t=c.type; const d=sp.dur!=null?sp.dur:(s.dur[t]||45); const am=sp.anesMode||(s.anesMode&&s.anesMode[t]); const a=sp.anes!=null?sp.anes:(s.anes[t]||0); return (am==='par'?0:a)+d; };
-  const ceilMap={}; TYPES.forEach(t=>ceilMap[t]=ceiling(s,t).n);
-  const cands=[caseList.slice(), caseList.slice().sort((a,b)=>wc(b)-wc(a)), caseList.slice().sort((a,b)=>wc(a)-wc(b)), caseList.slice().sort((a,b)=>(ceilMap[a.type]||999)-(ceilMap[b.type]||999))];
-  for(let k=0;k<200;k++){ const a=caseList.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} cands.push(a); }
-  let best=caseList.slice(), bf=-1, bm=Infinity;
-  for(const c of cands){ const rr=simulate(s,c.map(caseSpec)); const fit=rr.sched.length, mk=rr.sched.reduce((m,o)=>Math.max(m,o.end),0); if(fit>bf||(fit===bf&&mk<bm)){bf=fit;bm=mk;best=c.slice();} }
-  caseList=best; manualOps=null; saveSettings(); render();
+function toggleCardDone(id, withImpl){
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  if(c.status==='done' && !withImpl){ c.status='plan'; c.doneEnd=null; }
+  else if(c.status!=='done'){
+    const sch=(lastPlanSched||[]).find(o=>o._card===c);
+    const now=new Date(); const wall=(now.getHours()*60+now.getMinutes())-8*60;
+    c.status='done';
+    c.doneEnd=Math.max(0, Math.round(sch ? (wall>=sch.end ? sch.end : Math.max(sch.start+1, wall)) : Math.max(0,wall)));
+    if(sch) c.tower=sch.tower;
+  }
+  manualOps=null; saveSettings(); render();
+  if(withImpl){ openImplants(id); const e=$('implEditor'); if(e) e.scrollIntoView({block:'center',behavior:'smooth'}); }
+}
+function renderCards(s, sched){
+  const host=$('cardList'); if(!host) return;
+  const byCard=new Map(); (sched||[]).forEach(o=>{ if(o._card) byCard.set(o._card,o); });
+  const nPlan=planCards().length;
+  const sig=cards.map(c=>c.id+':'+c.status+':'+(c.type==='custom'?'u':'s')).join('|')+'|'+nPlan;
+  if(sig!==cardsRenderedSig){
+    cardsRenderedSig=sig;
+    let pos=0;
+    host.innerHTML=cards.map(c=>{
+      const done=c.status==='done'; const p=done?0:(++pos);
+      const typeSel=`<select class="blk ctype" onchange="cardSet('${c.id}','type',this.value);render()"${done?' disabled':''}>${TYPES.map(t=>`<option value="${t}"${c.type===t?' selected':''}>${OPS[t].label}</option>`).join('')}<option value="custom"${c.type==='custom'?' selected':''}>Другое…</option></select>`;
+      const custom=c.type==='custom'?`<input type="text" class="cname clbl" placeholder="Название" value="${escHtml(c.label)}" oninput="cardSet('${c.id}','label',this.value)"><select class="blk" onchange="cardSet('${c.id}','joint',this.value);render()"${done?' disabled':''}>${Object.keys(JOINTS).map(j=>`<option value="${j}"${((c.joint&&JOINTS[c.joint])?c.joint:'knee')===j?' selected':''}>${JOINTS[j].label}</option>`).join('')}</select><input type="number" class="cdur" min="5" step="5" value="${c.dur||45}" title="длительность, мин" oninput="cardSet('${c.id}','dur',this.value)">`:'';
+      const ord=done?'<span class="cnum">✓</span>':`<select class="dnord" title="номер в очереди" onchange="cardMove('${c.id}',this.value)">${Array.from({length:nPlan},(_,n)=>`<option value="${n+1}"${n+1===p?' selected':''}>${n+1}</option>`).join('')}</select>`;
+      const ni=(c.implants||[]).reduce((a,x)=>a+(+x.q||0),0);
+      const impl=done?`<button class="implbtn${ni?' has':''}" onclick="openImplants('${c.id}')" title="списать импланты">${ni?'имп. '+ni:'+ имп.'}</button>`:'';
+      return `<div class="caserow crow${done?' cdone':''}" data-id="${c.id}">${ord}<span class="dot" style="background:${cardColor(c)}"></span>${typeSel}${custom}`
+        +`<input type="text" class="cname cpat" placeholder="фамилия" value="${escHtml(c.name)}" oninput="cardSet('${c.id}','name',this.value)">`
+        +`<span class="cfit" id="cfit-${c.id}"></span>${impl}`
+        +`<button class="ckb${done?' on':''}" onclick="toggleCardDone('${c.id}')" title="${done?'выполнена — нажмите, чтобы вернуть в план':'отметить выполненной'}">✓</button>`
+        +`<button class="x" onclick="removeCard('${c.id}')" title="убрать">×</button></div>`;
+    }).join('')||'<div class="note">Операций пока нет — добавьте кнопками «+» выше или через «Быстрый план».</div>';
+  }
+  cards.forEach(c=>{ const el=$('cfit-'+c.id); if(!el) return;
+    if(c.status==='done'){ el.innerHTML=`<span class="pill ok">до ${minToClock(c.doneEnd||0)} · стол ${(c.tower||0)+1}</span>`; return; }
+    const o=byCard.get(c);
+    el.innerHTML=o?`<span class="pill ok">${fmtTime(o.start)} · стол ${o.tower+1}</span>`:'<span class="pill bad">не влезает</span>';
+  });
+  const qa=$('quickAdd'); if(qa){
+    qa.innerHTML=TYPES.map(t=>{ const n=cards.filter(c=>c.type===t&&c.status!=='done').length;
+      return `<span class="qa"><span class="dot" style="background:${OPS[t].color}"></span><span class="qan">${OPS[t].short}</span><button onclick="removeLastCard('${t}')" title="убрать одну">−</button><b>${n}</b><button onclick="addCard('${t}')" title="добавить">+</button></span>`; }).join('');
+  }
+  const ch=$('cardsHint'); if(ch){ const d=doneCards().length; ch.textContent=`${nPlan} в плане${d?` · ${d} выполнено`:''}`; }
 }
 function toggleDone(v){ useDoneLog=v; saveSettings(); render(); }
-function nowByClock(){ manualOps=null; doneLog=[]; useDoneLog=true; const c=$('use_done'); if(c)c.checked=true; saveSettings(); render(); }
-function addDone(){
-  const t=$('done_type').value, tower=Number($('done_tower').value);
-  let end=clockToMin($('done_end').value);
-  if(!isFinite(end)){ return; }
-  end=Math.max(0, Math.min(end, readState().day));   // в пределах рабочего дня
-  manualOps=null;
-  doneLog.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6), type:t, end, tower});
-  useDoneLog=true; const c=$('use_done'); if(c)c.checked=true; saveSettings(); render();
-}
-function removeDone(id){ manualOps=null; if(implEditId===id) closeImplants(true); doneLog=doneLog.filter(d=>d.id!==id); saveSettings(); render(); }
-function clearDone(){ manualOps=null; closeImplants(true); doneLog=[]; saveSettings(); render(); }
 
 /* ---------- списание имплантов на пациента (в журнале выполненного) ---------- */
 const IMPL_KEY='arthroImplants1';
@@ -1057,39 +1065,35 @@ function renderImplNames(){
 }
 function implCatalogFor(d){ return IMPLANT_CATALOG[d.type]||[]; }
 function openImplants(id){
-  const d=doneLog.find(x=>x.id===id); if(!d) return;
+  const c=cards.find(x=>x.id===id); if(!c) return;
   implEditId=id;
-  const lbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
-  $('implTitle').textContent=`Импланты: ${lbl} · до ${minToClock(d.end)} · стол ${d.tower+1}`;
-  $('impl_pat').value=d.pat||'';
+  $('implTitle').textContent=`Импланты: ${cardLabel(c)}${c.name?' — '+c.name:''}${c.status==='done'?' · до '+minToClock(c.doneEnd||0):''}`;
   $('impl_name').value=''; $('impl_mfr').value=''; $('impl_size').value=''; $('impl_qty').value='1';
   renderImplNames(); renderImplTpl(); renderImplItems();
   $('implEditor').style.display='';
-  if(!$('impl_pat').value) $('impl_pat').focus();
 }
 function closeImplants(silent){ implEditId=null; const e=$('implEditor'); if(e)e.style.display='none'; if(!silent){ saveSettings(); render(); } }
-function implPat(v){ const d=doneLog.find(x=>x.id===implEditId); if(d) d.pat=v; }
 // шаблон операции: позиции с вариантами-чипами; нажатие = списать
 function renderImplTpl(){
-  const d=doneLog.find(x=>x.id===implEditId); const host=$('implTpl'); if(!host) return;
+  const d=cards.find(x=>x.id===implEditId); const host=$('implTpl'); if(!host) return;
   const cat=d?implCatalogFor(d):[];
   host.innerHTML=cat.map((p,pi)=>`<div class="impltplrow"><span class="tpllbl">${escHTML(p.pos)}</span>`
     +p.v.map((v,vi)=>`<button class="tchip" onclick="implAddVar(${pi},${vi})" title="${escHTML(v.m)} — нажмите, чтобы списать">${escHTML(v.n)}<span class="tmfr">${escHTML(v.m)}</span></button>`).join('')
     +`</div>`).join('') || (d&&d.type==='custom'?'':'');
 }
 function implAddVar(pi,vi){
-  const d=doneLog.find(x=>x.id===implEditId); if(!d) return;
+  const d=cards.find(x=>x.id===implEditId); if(!d) return;
   const p=implCatalogFor(d)[pi]; const v=p&&p.v[vi]; if(!v) return;
   if(!d.implants) d.implants=[];
   d.implants.push({n:v.n, m:v.m, size:(v.s&&v.s.length===1)?v.s[0]:'', q:p.q||1});
   rememberImpl(v.n,v.m,'');
-  renderImplItems(); saveSettings(); render();
+  renderImplItems(); cardsRenderedSig=null; saveSettings(); render();
   // сразу в размер нового пункта — уточнить одним движением
   const inputs=document.querySelectorAll('#implItems .isize');
   if(inputs.length) inputs[inputs.length-1].focus();
 }
 function implAdd(){
-  const d=doneLog.find(x=>x.id===implEditId); if(!d) return;
+  const d=cards.find(x=>x.id===implEditId); if(!d) return;
   const n=$('impl_name').value.trim(); if(!n){ $('impl_name').focus(); return; }
   const m=$('impl_mfr').value.trim(), size=$('impl_size').value.trim();
   const q=Math.max(1,Math.round(+$('impl_qty').value||1));
@@ -1097,14 +1101,14 @@ function implAdd(){
   d.implants.push({n,m,size,q});
   rememberImpl(n,m,size);
   $('impl_name').value=''; $('impl_size').value=''; $('impl_qty').value='1'; $('impl_name').focus();
-  renderImplItems(); saveSettings(); render();
+  renderImplItems(); cardsRenderedSig=null; saveSettings(); render();
 }
-function implSet(i,f,v){ const d=doneLog.find(x=>x.id===implEditId); if(!d||!d.implants||!d.implants[i]) return; d.implants[i][f]=v; if(f==='size') rememberImpl(d.implants[i].n,'',v); }
-function implQ(i,delta){ const d=doneLog.find(x=>x.id===implEditId); if(!d||!d.implants||!d.implants[i]) return; d.implants[i].q=Math.max(1,Math.round((+d.implants[i].q||1)+delta)); renderImplItems(); saveSettings(); render(); }
-function implRemove(i){ const d=doneLog.find(x=>x.id===implEditId); if(!d||!d.implants) return; d.implants.splice(i,1); renderImplItems(); saveSettings(); render(); }
+function implSet(i,f,v){ const d=cards.find(x=>x.id===implEditId); if(!d||!d.implants||!d.implants[i]) return; d.implants[i][f]=v; if(f==='size') rememberImpl(d.implants[i].n,'',v); }
+function implQ(i,delta){ const d=cards.find(x=>x.id===implEditId); if(!d||!d.implants||!d.implants[i]) return; d.implants[i].q=Math.max(1,Math.round((+d.implants[i].q||1)+delta)); renderImplItems(); cardsRenderedSig=null; saveSettings(); render(); }
+function implRemove(i){ const d=cards.find(x=>x.id===implEditId); if(!d||!d.implants) return; d.implants.splice(i,1); renderImplItems(); cardsRenderedSig=null; saveSettings(); render(); }
 // списанные позиции: размер уточняется на месте, количество степпером
 function renderImplItems(){
-  const d=doneLog.find(x=>x.id===implEditId); const host=$('implItems'); if(!host) return;
+  const d=cards.find(x=>x.id===implEditId); const host=$('implItems'); if(!host) return;
   const items=(d&&d.implants)||[];
   // подсказки размеров: каталожные + выученные по названию
   const sizesFor=x=>{
@@ -1127,11 +1131,12 @@ function renderImplItems(){
 const implLine=x=>`${x.n}${x.size?' '+x.size:''}${x.m?' ('+x.m+')':''} × ${x.q}`;
 // срез: списание имплантов за день (для старшей м/с)
 function sliceImpl(){
-  const rows=doneLog.slice().sort((a,b)=>a.end-b.end).filter(d=>(d.implants&&d.implants.length)||d.pat);
+  const dl=doneLogView();
+  const rows=dl.slice().sort((a,b)=>a.end-b.end).filter(d=>(d.implants&&d.implants.length)||d.pat);
   const tot={};
-  doneLog.forEach(d=>(d.implants||[]).forEach(x=>{ const k=`${x.n}${x.size?' '+x.size:''}${x.m?' ('+x.m+')':''}`; tot[k]=(tot[k]||0)+(+x.q||0); }));
+  dl.forEach(d=>(d.implants||[]).forEach(x=>{ const k=`${x.n}${x.size?' '+x.size:''}${x.m?' ('+x.m+')':''}`; tot[k]=(tot[k]||0)+(+x.q||0); }));
   let out='Списание имплантов за день\n\n';
-  if(!rows.length) out+='импланты не списывались (заполняются в «Журнале выполненного» кнопкой «имп.»)\n';
+  if(!rows.length) out+='импланты не списывались (галочка «выполнена» у операции → кнопка «имп.»)\n';
   else rows.forEach(d=>{
     const lbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
     out+=`${minToClock(d.end)}  ${lbl} · стол ${d.tower+1}${d.pat?' — '+d.pat:''}\n`;
@@ -1143,26 +1148,14 @@ function sliceImpl(){
   return out;
 }
 function renderDone(s){
-  const tsel=$('done_type'); if(tsel && tsel.options.length!==TYPES.length) tsel.innerHTML=TYPES.map(t=>`<option value="${t}">${OPS[t].label}</option>`).join('');
-  const N=stationCount(s);
-  const wsel=$('done_tower'); if(wsel && wsel.options.length!==N){ const keepW=wsel.value; let wo=''; for(let i=0;i<N;i++) wo+=`<option value="${i}">Стол ${i+1}</option>`; wsel.innerHTML=wo; if([...wsel.options].some(o=>o.value===keepW)) wsel.value=keepW; }
-  // галочку use_done тут НЕ трогаем: render() вызывается слушателем 'input' раньше 'change',
-  // и перестановка checked здесь не давала снять режим (гонка событий). Синхронизируем при загрузке/программных изменениях.
-  const chips=doneLog.slice().sort((a,b)=>a.end-b.end).map(d=>{
-    const oob = d.tower>=N ? ' · <span style="color:var(--bad)">вне диапазона</span>':'';
-    const col=OPS[d.type]?OPS[d.type].color:'#888', lbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
-    const ni=implSum(d);
-    const ib=`<button class="implbtn${ni?' has':''}" onclick="openImplants('${d.id}')" title="списать импланты на пациента">${ni?'имп. '+ni:'+ имп.'}</button>`;
-    return `<span class="chip done"><span class="dot" style="background:${col}"></span><span class="rem">${lbl}</span><span class="muted">${escHTML(d.pat||'')}${d.pat?' · ':''}до ${minToClock(d.end)} · стол ${d.tower+1}${oob}</span>${ib}<button class="x" onclick="removeDone('${d.id}')" title="убрать">×</button></span>`;
-  }).join('');
-  $('doneChips').innerHTML=chips;
-  if(implEditId && !doneLog.some(d=>d.id===implEditId)) closeImplants(true);
-  $('doneClearRow').style.display=doneLog.length?'flex':'none';
-  $('doneNote').innerHTML = (useDoneLog && !isTodayPlan())
-    ? `<b style="color:var(--warn)">Выбранный день — не сегодня.</b> Режим остатка дня работает только на сегодняшней дате, поэтому этот день считается целиком с 08:00. Галочка и журнал сохранятся.`
+  if(implEditId && !cards.some(c=>c.id===implEditId)) closeImplants(true);
+  const dn=$('doneNote'); if(!dn) return;
+  const nd=doneCards().length;
+  dn.innerHTML = (useDoneLog && !isTodayPlan())
+    ? `<b style="color:var(--warn)">Выбранный день — не сегодня.</b> Режим остатка дня работает только на сегодняшней дате, поэтому этот день считается целиком с 08:00. Галочка сохранится.`
     : useDoneLog
-    ? `Режим остатка дня <b style="color:var(--ok)">включён</b>. Новые операции планируются с <b>${fmtTime(Math.max(0,s.nowFloor))}</b>${doneLog.length?`, учтено сделано: <b>${doneLog.length}</b>`:''}. Наборы из живого таймера стерилизации (ниже) учитываются автоматически.`
-    : `Выключено — считается весь день с 08:00. Включите, чтобы спланировать только остаток дня (с учётом уже сделанного и наборов в стерилизации).`;
+    ? `Режим остатка дня <b style="color:var(--ok)">включён</b>. Новые операции планируются с <b>${fmtTime(Math.max(0,s.nowFloor))}</b>${nd?`, выполнено: <b>${nd}</b>`:''}. Наборы из живого таймера стерилизации учитываются автоматически.`
+    : `Выключено — считается весь день с 08:00. Включите, чтобы спланировать только остаток дня (с учётом выполненных операций и наборов в стерилизации).`;
 }
 
 /* ---------- план на неделю: данные каждого дня живут под своей датой ---------- */
@@ -1173,18 +1166,37 @@ try{ dayStore=JSON.parse(localStorage.getItem(DAYS_KEY))||{}; }catch(e){ dayStor
 try{ const lim=new Date(); lim.setDate(lim.getDate()-90); const limStr=lim.toISOString().slice(0,10);
   for(const k in dayStore){ if(k<limStr) delete dayStore[k]; } }catch(e){}
 function daySnapshot(){
-  const mix={}; TYPES.forEach(t=>{const el=$('m_'+t); mix[t]=el?el.value:0;});
-  return {mix, cases:caseList, useCases, doneLog, useDoneLog, blocks:manualBlocks, custom:customList, names:dayNames, order:dayOrder};
+  return {cards, useDoneLog, blocks:manualBlocks};
+}
+// миграция дня со старой модели (счётчики+фамилии / поимённый список / журнал) в карточки
+function migrateDay(d){
+  if(Array.isArray(d.cards)) return sanitizeCards(d.cards);
+  const out=[];
+  if(d.useCases && Array.isArray(d.cases)){
+    d.cases.forEach(x=>out.push({type:(x.type==='custom')?'custom':(OPS[x.type]?x.type:'bankart'), label:x.label||'',
+      joint:(x.setCat==='shoulder'||x.setCat==='latarjet')?'shoulder':'knee', dur:x.dur||null, name:x.name||'', status:'plan'}));
+  } else {
+    const mix=d.mix||{}, names=d.names||{}, slots=[];
+    TYPES.forEach(t=>{ const n=Math.max(0,Math.round(parseFloat(mix[t])||0)); for(let k=0;k<n;k++) slots.push({key:t,k}); });
+    (Array.isArray(d.custom)?d.custom:[]).forEach(c=>{ const n=Math.max(0,Math.round(c.count||0)); for(let k=0;k<n;k++) slots.push({key:c.id,k,c}); });
+    const bySlot={}; slots.forEach(x=>bySlot[x.key+':'+x.k]=x);
+    const ordered=[];
+    (Array.isArray(d.order)?d.order:[]).forEach(sl=>{ if(bySlot[sl]){ ordered.push(bySlot[sl]); delete bySlot[sl]; } });
+    slots.forEach(x=>{ if(bySlot[x.key+':'+x.k]){ ordered.push(x); delete bySlot[x.key+':'+x.k]; } });
+    ordered.forEach(x=>{ const nm=(names[x.key]&&names[x.key][x.k])||'';
+      if(x.c) out.push({type:'custom', label:x.c.label||'', joint:x.c.joint||'knee', dur:x.c.dur||45, name:nm, status:'plan'});
+      else out.push({type:x.key, name:nm, status:'plan'});
+    });
+  }
+  (Array.isArray(d.doneLog)?d.doneLog:[]).forEach(dl=>out.push({type:(OPS[dl.type]?dl.type:'custom'), label:dl.lbl||'',
+    name:dl.pat||'', status:'done', doneEnd:dl.end||0, tower:dl.tower||0, implants:Array.isArray(dl.implants)?dl.implants:[]}));
+  return sanitizeCards(out);
 }
 function applyDay(d){
   d=d||{};
-  if(d.mix) TYPES.forEach(t=>{const el=$('m_'+t); if(el && d.mix[t]!=null) el.value=d.mix[t];});
-  caseList=Array.isArray(d.cases)?d.cases:[]; useCases=!!d.useCases; const cc=$('use_cases'); if(cc) cc.checked=useCases;
-  doneLog=Array.isArray(d.doneLog)?d.doneLog:[]; useDoneLog=!!d.useDoneLog; const cd=$('use_done'); if(cd) cd.checked=useDoneLog;
+  cards=migrateDay(d); cardsRenderedSig=null;
+  useDoneLog=!!d.useDoneLog; const cd=$('use_done'); if(cd) cd.checked=useDoneLog;
   manualBlocks=Array.isArray(d.blocks)?d.blocks:[];
-  customList=Array.isArray(d.custom)?sanitizeCustom(d.custom):[]; customRenderedIds=null;
-  dayNames=sanitizeNames(d.names); dayNamesSig=null;
-  dayOrder=Array.isArray(d.order)?d.order.filter(x=>typeof x==='string'):null;
   manualOps=null;
 }
 function switchDay(v){
@@ -1209,7 +1221,8 @@ function renderWeek(){
     const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     const rec=(ds===curDay)?daySnapshot():dayStore[ds];
     let cnt=0;
-    if(rec) cnt = rec.useCases ? (rec.cases||[]).length : TYPES.reduce((a,tp)=>a+Math.max(0,Math.round(parseFloat(rec.mix&&rec.mix[tp])||0)),0)+(rec.custom||[]).reduce((a,c)=>a+Math.max(0,Math.round(+c.count||0)),0);
+    if(rec) cnt = Array.isArray(rec.cards) ? rec.cards.length
+      : (rec.useCases ? (rec.cases||[]).length : TYPES.reduce((a,tp)=>a+Math.max(0,Math.round(parseFloat(rec.mix&&rec.mix[tp])||0)),0)+(rec.custom||[]).reduce((a,c)=>a+Math.max(0,Math.round(+c.count||0)),0));
     html+=`<button class="wday${ds===curDay?' act':''}${ds===todayStr?' today':''}" onclick="gotoDay('${ds}')" title="${ds===todayStr?'сегодня — ':''}открыть план этого дня">${names[i]} ${d.getDate()}.${String(d.getMonth()+1).padStart(2,'0')}<b>${cnt?cnt+' опер.':'—'}</b></button>`;
   }
   host.innerHTML=html;
@@ -1217,11 +1230,11 @@ function renderWeek(){
 
 /* ---------- сохранение всех настроек между перезагрузками ---------- */
 const SETTINGS_KEY='arthroSettings1';
-const PERSIST_IDS=['inv_towers','inv_optics','inv_shavers','set_shoulder','set_acl','set_meniscus','set_latarjet','p_anesteams','p_date','p_tables','p_day','p_ster','p_turnover','d_bankart','d_cuff','d_acl','d_meniscus','d_latarjet','a_bankart','a_cuff','a_acl','a_meniscus','a_latarjet','am_bankart','am_cuff','am_acl','am_meniscus','am_latarjet','m_bankart','m_cuff','m_acl','m_meniscus','m_latarjet'];
+const PERSIST_IDS=['inv_towers','inv_optics','inv_shavers','set_shoulder','set_acl','set_meniscus','set_latarjet','p_anesteams','p_date','p_tables','p_day','p_ster','p_turnover','d_bankart','d_cuff','d_acl','d_meniscus','d_latarjet','a_bankart','a_cuff','a_acl','a_meniscus','a_latarjet','am_bankart','am_cuff','am_acl','am_meniscus','am_latarjet'];
 function saveSettings(){
   try{
     const f={}; PERSIST_IDS.forEach(id=>{const el=$(id); if(el) f[id]=el.value;});
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({fields:f, tableWin, blocks:manualBlocks, doneLog, useDoneLog, cases:caseList, useCases, surgeons:surgeonList, custom:customList, names:dayNames, order:dayOrder}));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({fields:f, tableWin, blocks:manualBlocks, useDoneLog, surgeons:surgeonList, cards}));
     if(curDay){ dayStore[curDay]=daySnapshot(); localStorage.setItem(DAYS_KEY, JSON.stringify(dayStore)); }
   }catch(e){
     if(!saveSettings._warned){ saveSettings._warned=true;
@@ -1235,16 +1248,11 @@ function loadSettings(){
     if(o.fields) PERSIST_IDS.forEach(id=>{const el=$(id); if(el && o.fields[id]!=null) el.value=o.fields[id];});
     if(Array.isArray(o.tableWin)) tableWin=o.tableWin.map(w=>({from:+w.from||0,to:+w.to||0}));
     if(Array.isArray(o.blocks)) manualBlocks=o.blocks;
-    if(Array.isArray(o.doneLog)) doneLog=o.doneLog;
+    if(Array.isArray(o.cards)) cards=sanitizeCards(o.cards);
+    else cards=migrateDay(o);   // старые настройки: счётчики/пациенты/журнал -> карточки
     useDoneLog=!!o.useDoneLog;
     const c=$('use_done'); if(c) c.checked=useDoneLog;
-    if(Array.isArray(o.cases)) caseList=o.cases.map(x=>({id:x.id||('c'+Math.random().toString(36).slice(2,7)), name:x.name||'', type:(x.type==='custom'||OPS[x.type])?x.type:'bankart', side:x.side||'', dur:(x.dur!=null?x.dur:null), label:x.label||'', setCat:(['shoulder','acl','meniscus','latarjet'].indexOf(x.setCat)>=0?x.setCat:'acl')}));
-    useCases=!!o.useCases;
-    const cc=$('use_cases'); if(cc) cc.checked=useCases;
     if(Array.isArray(o.surgeons)) surgeonList=sanitizeSurgeons(o.surgeons);
-    if(Array.isArray(o.custom)) customList=sanitizeCustom(o.custom);
-    if(o.names) dayNames=sanitizeNames(o.names);
-    if(Array.isArray(o.order)) dayOrder=o.order.filter(x=>typeof x==='string');
   }catch(e){}
   if(!surgeonList.length){
     // первый запуск: состав отделения по умолчанию (навыки — все операции; снимите лишние галочки)
@@ -1261,10 +1269,10 @@ function resetAll(){
   location.reload();
 }
 function newDay(){
-  if((caseList.length||doneLog.length||manualOps) && !confirm('Начать новый день? Список пациентов, журнал остатка дня, разовые блокировки и таймеры стерилизации очистятся. Настройки отделения и шаблоны останутся.')) return;
-  caseList=[]; useCases=false; const c=$('use_cases'); if(c)c.checked=false;
-  doneLog=[]; useDoneLog=false; const c2=$('use_done'); if(c2)c2.checked=false;
-  manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null; customList=[]; customRenderedIds=null; dayNames={}; dayNamesSig=null; dayOrder=null;
+  if((cards.length||manualOps) && !confirm('Начать новый день? Операции дня, разовые блокировки и таймеры стерилизации очистятся. Настройки отделения и шаблоны останутся.')) return;
+  cards=[]; cardsRenderedSig=null;
+  useDoneLog=false; const c2=$('use_done'); if(c2)c2.checked=false;
+  manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null;
   try{ sterTimers=[]; setSterMap={}; saveSter(); }catch(e){}
   const sa=$('sliceActions'); if(sa)sa.style.display='none'; const so=$('sliceOut'); if(so)so.textContent='';
   const d=$('p_date'); if(d){ const t=new Date(); d.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); curDay=d.value; }
@@ -1278,13 +1286,12 @@ function putPresets(p){ try{localStorage.setItem(PRESETS_KEY,JSON.stringify(p));
 function snapshotConfig(){ const f={}; PERSIST_IDS.forEach(id=>{const el=$(id); if(el&&id!=='p_date') f[id]=el.value;}); return {fields:f, tableWin:tableWin.map(w=>({from:w.from,to:w.to})), surgeons:surgeonList.map(g=>({id:g.id,name:g.name,ops:(g.ops||[]).slice()}))}; }
 function applyConfig(snap){
   if(!snap) return;
-  if((caseList.length || doneLog.length) && !confirm('Загрузка шаблона очистит список пациентов и журнал остатка дня (настройки/ресурсы возьмутся из шаблона). Продолжить?')) return;
+  if(cards.length && !confirm('Загрузка шаблона очистит операции дня (настройки/ресурсы возьмутся из шаблона). Продолжить?')) return;
   if(snap.fields) PERSID_OK(snap);
   if(Array.isArray(snap.tableWin)){ tableWin=snap.tableWin.map(w=>({from:+w.from||0,to:+w.to||0})); tableWinRenderedN=-1; }
   if(Array.isArray(snap.surgeons) && snap.surgeons.length){ surgeonList=sanitizeSurgeons(snap.surgeons); surgRenderedIds=null; }
   // шаблон — это чистый день: убираем разовые блокировки, журнал, режим остатка и список пациентов
-  manualOps=null; manualBlocks=[]; doneLog=[]; useDoneLog=false; const c=$('use_done'); if(c) c.checked=false;
-  caseList=[]; useCases=false; const cc=$('use_cases'); if(cc) cc.checked=false;
+  manualOps=null; manualBlocks=[]; cards=[]; cardsRenderedSig=null; useDoneLog=false; const c=$('use_done'); if(c) c.checked=false;
   saveSettings(); render();
 }
 function PERSID_OK(snap){ PERSIST_IDS.forEach(id=>{const el=$(id); if(el && snap.fields[id]!=null) el.value=snap.fields[id];}); }
@@ -1421,7 +1428,7 @@ function readState(){
     turnover: num('p_turnover'),
     tableWin: win,
     useDoneLog: liveDay,
-    doneLog: doneLog.slice(),
+    doneLog: doneLogView(),
     nowFloor: floor,
     wallNow,
     setReadyMin: liveDay?setReadyMin:{},
@@ -1437,7 +1444,7 @@ function readState(){
       towers: num('inv_towers'), optics: num('inv_optics'), shavers: num('inv_shavers'),
       sets: {shoulder:num('set_shoulder'), acl:num('set_acl'), meniscus:num('set_meniscus'), latarjet:num('set_latarjet')}
     },
-    mix: {bankart:num('m_bankart'),cuff:num('m_cuff'),acl:num('m_acl'),meniscus:num('m_meniscus'),latarjet:num('m_latarjet')}
+    mix: (()=>{ const m={}; TYPES.forEach(t=>m[t]=0); planCards().forEach(c=>{ if(m[c.type]!=null) m[c.type]++; }); return m; })()
   };
 }
 const stationCount = s => Math.max(0, Math.min(Math.round(s.tables), Math.round(s.inv.towers)));
@@ -1466,90 +1473,12 @@ function buildOrder(mix){
   return order;
 }
 
-/* ---------- свои (нешаблонные) операции в режиме чисел: название текстом + набор + длительность + сколько ---------- */
-let customList=[];   // [{id,label,joint,setCat,dur,count}]
-// свои операции задаются суставом; нужный набор приложение выбирает само
+/* ---------- суставы своих операций: набор и анестезию выбирает движок ---------- */
 const JOINTS={
   shoulder:{label:'Плечо',     cat:'shoulder'},   // плечевой набор, анестезия параллельно в зале
   knee:    {label:'Колено',    cat:'acl'},        // ПКС-набор (годен на всё коленное), спинальная на столе
   ankle:   {label:'Голеностоп',cat:'acl'},        // тоже ПКС-набор, спинальная на столе
 };
-const jointOf=c=>(c.joint&&JOINTS[c.joint])?c.joint:((c.setCat==='shoulder'||c.setCat==='latarjet')?'shoulder':'knee');
-function sanitizeCustom(arr){
-  return arr.map(x=>{
-    const j=(x.joint&&JOINTS[x.joint])?x.joint:((x.setCat==='shoulder'||x.setCat==='latarjet')?'shoulder':'knee');
-    return {
-      id:x.id||('u'+Math.random().toString(36).slice(2,7)),
-      label:typeof x.label==='string'?x.label:'',
-      joint:j, setCat:JOINTS[j].cat,
-      dur:(isFinite(+x.dur)&&+x.dur>0)?Math.round(+x.dur):45,
-      count:(isFinite(+x.count)&&+x.count>0)?Math.round(+x.count):0,
-    };
-  });
-}
-function customSpec(c){
-  const j=jointOf(c), cat=JOINTS[j].cat, par=(j==='shoulder');
-  return {type:'custom', _cid:c.id, skillType:SKILL_BY_CAT[cat], dur:(c.dur>0?+c.dur:45),
-    anes:par?15:12, anesMode:par?'par':'room', sets:[cat], shaver:cat==='acl',
-    label:(c.label&&c.label.trim())||'Операция', color:'var(--'+cat+')'};
-}
-// полный порядок дня: шаблонные типы + свои операции, чередованием (как buildOrder)
-function buildOrderFull(s, mix){
-  // каждый элемент несёт _slot = «тип:номер-вхождения» — стабильная личность операции:
-  // к нему привязаны фамилия (dayNames) и место в очереди (dayOrder)
-  const rem={...(mix||s.mix)}; const cRem=customList.map(c=>Math.max(0,Math.round(c.count||0)));
-  const items=[]; const occ={}; let go=true;
-  while(go){ go=false;
-    for(const t of TYPES){ if(rem[t]>0){ const k=(occ[t]=occ[t]||0); occ[t]++; items.push({slot:t+':'+k, el:{type:t,_slot:t+':'+k}}); rem[t]--; go=true; } }
-    customList.forEach((c,i)=>{ if(cRem[i]>0){ const k=(occ[c.id]=occ[c.id]||0); occ[c.id]++; const sp=customSpec(c); sp._slot=c.id+':'+k; items.push({slot:c.id+':'+k, el:sp}); cRem[i]--; go=true; } });
-  }
-  // пользовательская очередь (назначенные номера) — только для основного плана, не для сценариев-прикидок
-  if(mix==null && Array.isArray(dayOrder) && dayOrder.length){
-    const map={}; items.forEach(x=>{ map[x.slot]=x.el; });
-    const out=[];
-    dayOrder.forEach(sl=>{ if(map[sl]){ out.push(map[sl]); delete map[sl]; } });
-    items.forEach(x=>{ if(map[x.slot]){ out.push(x.el); delete map[x.slot]; } });
-    return out;
-  }
-  return items.map(x=>x.el);
-}
-function addCustomOp(){ customList.push({id:'u'+Date.now()+Math.random().toString(36).slice(2,5), label:'', setCat:'acl', dur:45, count:1}); manualOps=null; saveSettings(); render(); const f=document.querySelectorAll('#customOps .cname'); if(f.length) f[f.length-1].focus(); }
-function removeCustomOp(id){ customList=customList.filter(c=>c.id!==id); manualOps=null; saveSettings(); render(); }
-function customSet(id,f,v){
-  const c=customList.find(x=>x.id===id); if(!c) return;
-  if(f==='dur') c.dur=(v===''||!isFinite(+v))?45:Math.max(5,Math.round(+v));
-  else if(f==='count') c.count=(v===''||!isFinite(+v))?0:Math.max(0,Math.round(+v));
-  else c[f]=v;
-  if(f==='joint'){ c.joint=(JOINTS[v]?v:'knee'); c.setCat=JOINTS[c.joint].cat; }
-  if(f==='joint'||f==='setCat'){ const row=document.querySelector('#customOps .caserow[data-id="'+id+'"] .dot'); if(row) row.style.background='var(--'+(c.setCat||'acl')+')'; }
-  manualOps=null; /* перерисует глобальный input-слушатель */
-}
-let customRenderedIds=null;
-function renderCustomOps(s, sched, order){
-  const host=$('customOps'); if(!host) return;
-  const ids=customList.map(c=>c.id).join(',');
-  if(ids!==customRenderedIds){
-    customRenderedIds=ids;
-    const esc=x=>(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
-    host.innerHTML=customList.map(c=>`<div class="caserow" data-id="${c.id}">
-      <span class="dot" style="background:var(--${c.setCat||'acl'})"></span>
-      <input type="text" class="cname" placeholder="Название операции" value="${esc(c.label)}" oninput="customSet('${c.id}','label',this.value)">
-      <select class="blk" title="какой сустав" onchange="customSet('${c.id}','joint',this.value);render()">${Object.keys(JOINTS).map(v=>`<option value="${v}"${jointOf(c)===v?' selected':''}>${JOINTS[v].label}</option>`).join('')}</select>
-      <input type="number" class="cdur" min="5" step="5" title="длительность, мин" value="${c.dur}" oninput="customSet('${c.id}','dur',this.value)">
-      <span class="muted" style="font-size:12px">шт.</span>
-      <input type="number" class="cdur" min="0" style="width:48px;flex-basis:48px" title="сколько таких сегодня" value="${c.count}" oninput="customSet('${c.id}','count',this.value)">
-      <span class="cfit" id="ufit-${c.id}"></span>
-      <button class="x" onclick="removeCustomOp('${c.id}')" title="убрать">×</button>
-    </div>`).join('');
-  }
-  // статус «влезает»: считаем по расписанию, привязка через order[oidx]._cid
-  const got={}; (sched||[]).forEach(o=>{ const el=order&&order[o.oidx]; if(el&&el._cid) got[el._cid]=(got[el._cid]||0)+1; });
-  customList.forEach(c=>{ const el=$('ufit-'+c.id); if(!el) return;
-    const want=Math.max(0,Math.round(c.count||0)), g=got[c.id]||0;
-    el.innerHTML = want===0?'<span class="muted">—</span>':(g>=want?`<span class="pill ok">${g}/${want}</span>`:`<span class="pill bad">${g}/${want}</span>`);
-  });
-}
-
 const SKILL_BY_CAT={shoulder:'bankart',latarjet:'latarjet',acl:'acl',meniscus:'meniscus'};
 // нормализация элемента плана: строка-тип ИЛИ объект-описание {type,dur,anes,anesMode,sets,shaver,label,color,setCat}
 function opSpec(s, el){
@@ -1671,13 +1600,14 @@ function simulate(s, order){
 }
 
 // grow a base mix one op at a time, keeping roughly its ratio, until nothing more fits
-function fillToMax(s, base){
+// сколько операций каждого типа ЕЩЁ влезет поверх fixed (массив спецификаций), в пропорциях base
+function fillToMax(s, base, fixed){
+  fixed=fixed||[];
   if(TYPES.every(t=>!base[t])) base={bankart:1,cuff:1,acl:1,meniscus:1,latarjet:1};
   let active=TYPES.filter(t=>base[t]>0);
   const baseSum=active.reduce((a,t)=>a+base[t],0);
   const mix={bankart:0,cuff:0,acl:0,meniscus:0,latarjet:0};
-  // свои операции — фиксированная часть дня: занимают ресурсы; их собственные отказы не должны стопорить рост
-  const baseRej=Object.values(simulate(s, buildOrderFull(s, mix)).rejected).reduce((a,b)=>a+b,0);
+  const baseRej=fixed.length?Object.values(simulate(s, fixed).rejected).reduce((a,b)=>a+b,0):0;
   let guard=0;
   while(active.length && guard++<800){
     const tot=TYPES.reduce((a,t)=>a+mix[t],0)||1;
@@ -1687,7 +1617,7 @@ function fillToMax(s, base){
       if(deficit<worst){worst=deficit;pick=t;}
     }
     const trial={...mix}; trial[pick]++;
-    const r=simulate(s, buildOrderFull(s, trial));
+    const r=simulate(s, fixed.concat(buildOrder(trial)));
     const rej=Object.values(r.rejected).reduce((a,b)=>a+b,0);
     if(rej>baseRej) active=active.filter(t=>t!==pick);
     else mix[pick]++;
@@ -1752,7 +1682,7 @@ function computeScenarios(s){
   const rows=SCENARIOS.map(sc=>{
     const mix=fillToMax(s, sc.base);
     const total=TYPES.reduce((a,t)=>a+mix[t],0);
-    const r=simulate(s, buildOrderFull(s, mix));
+    const r=simulate(s, buildOrder(mix));
     const la=loadAnalysis(s, r.sched);
     return {name:sc.name, mix, total, limit:la.maxName};
   });
@@ -1778,9 +1708,11 @@ function render(){
   if(noSkill.length) sn+=`<br><b style="color:var(--bad)">Некому делать:</b> ${noSkill.map(t=>OPS[t].label).join(', ')} — нет хирурга с таким навыком, эти операции не встанут в план.`;
   $('surgNote').innerHTML=sn;
 
-  const useCasesNow = useCases;   // видимость и расчёт по пациентам управляются тумблером (даже если список пуст)
-  const order = useCasesNow ? caseList.map(c=>caseSpec(c)) : buildOrderFull(s);
+  const order = planCards().map(c=>cardSpecOf(s,c));
   const r=simulate(s, order);
+  // карточка и фамилия — прямо на записи расписания (нужно всем потребителям ниже)
+  r.sched.forEach(o=>{ const el=order[o.oidx]; o._card=(el&&el._card)||null; o._name=(o._card&&o._card.name&&o._card.name.trim())||null; });
+  lastPlanSched=r.sched;
   const total=r.sched.length;
   const rej=Object.values(r.rejected).reduce((a,b)=>a+b,0);
   const tables=peakConcurrent(r.sched);
@@ -1789,7 +1721,7 @@ function render(){
   // scenarios (also gives absolute max)
   // тяжёлые расчёты (сценарии + потолки — сотни симуляций) зависят только от ресурсов и времени:
   // кешируем по сигнатуре, чтобы каждая буква имени пациента не пересчитывала их заново
-  const heavySig=JSON.stringify([s.inv,s.dur,s.anes,s.anesMode,(s.surgeonList||[]).map(g=>g.ops),s.anesTeams,s.tables,s.dayDef,s.day,s.turnover,s.ster,s.tableWin,s.blocks,s.useDoneLog,s.nowFloor,s.setReadyMin,s.aggReadyMin,s.doneLog,customList.map(c=>[c.setCat,c.dur,c.count])],(k,v)=>typeof v==='number'?Math.round(v):v);
+  const heavySig=JSON.stringify([s.inv,s.dur,s.anes,s.anesMode,(s.surgeonList||[]).map(g=>g.ops),s.anesTeams,s.tables,s.dayDef,s.day,s.turnover,s.ster,s.tableWin,s.blocks,s.useDoneLog,s.nowFloor,s.setReadyMin,s.aggReadyMin,s.doneLog],(k,v)=>typeof v==='number'?Math.round(v):v);
   let scn;
   if(render._sig===heavySig && render._scn){ scn=render._scn; }
   else { scn=computeScenarios(s); render._sig=heavySig; render._scn=scn; render._ceil=null; }
@@ -1811,14 +1743,7 @@ function render(){
   accHint('accDoneHint', s.useDoneLog?('вкл · с '+fmtTime(Math.max(0,s.nowFloor))):'выкл');
   accHint('accResHint', `плечо ${Math.round(s.inv.sets.shoulder)} · ПКС ${Math.round(s.inv.sets.acl)} · мениск ${Math.round(s.inv.sets.meniscus)} · латарже ${Math.round(s.inv.sets.latarjet)}`);
 
-  const fitCnt={}; r.sched.forEach(o=>fitCnt[o.type]=(fitCnt[o.type]||0)+1);
-  TYPES.forEach(t=>{
-    const want=s.mix[t], got=fitCnt[t]||0, el=$('fit_'+t);
-    if(want===0){el.innerHTML='<span class="muted">—</span>';return;}
-    el.innerHTML = got>=want?`<span class="pill ok">${got}/${want}</span>`:`<span class="pill bad">${got}/${want}</span>`;
-  });
-  renderCases(s, r.sched, useCasesNow);
-  renderCustomOps(s, useCasesNow?[]:r.sched, useCasesNow?null:order);
+  renderCards(s, r.sched);
 
   // scenario table
   $('scnBody').innerHTML = scn.map((row,i)=>{
@@ -1843,14 +1768,13 @@ function render(){
   $('loads').innerHTML=html;
 
   let bn='';
-  const plannedN= useCases ? caseList.length : TYPES.reduce((a,t)=>a+Math.round(s.mix[t]||0),0)+customList.reduce((a,c)=>a+Math.max(0,Math.round(c.count||0)),0);
+  const plannedN= planCards().length;
   if(total===0){
     if(N===0) bn='<b style="color:var(--bad)">Нет операционных столов.</b> Добавьте стойки/столы в блоке «Ресурсы и хирурги» и «Столы и время».';
     else if(s.useDoneLog && s.nowFloor>=s.day) bn=`<b style="color:var(--warn)">Рабочий день уже закончился.</b> Сейчас ${fmtTime(s.nowFloor)}, а день — до ${fmtTime(s.day)}. Увеличьте окна столов или выключите «остаток дня».`;
     else if(plannedN>0){ const tb=Object.entries(r.blame).sort((a,b)=>b[1]-a[1])[0];
       bn=`<b style="color:var(--bad)">Ничего не помещается.</b> Ограничивает: ${tb?tb[0]:la.maxName}. Проверьте окна столов, блокировки${s.useDoneLog?' и время «сейчас»':''}.`; }
-    else if(useCases) bn='Добавьте пациентов кнопкой «+ Добавить пациента» в блоке «Что оперирую сегодня».';
-    else bn='Задайте, что оперируете, в блоке «Что оперирую сегодня» — или нажмите «Максимум в этих пропорциях».';
+    else bn='Добавьте операции в «Операциях дня» кнопками «+» — или нажмите «Максимум в этих пропорциях».';
   }
   else if(rej>0){
     const top=Object.entries(r.blame).sort((a,b)=>b[1]-a[1])[0];
@@ -1866,9 +1790,9 @@ function render(){
   // расписание: авто или ручное (перетаскивание мышью)
   let drawSched, conf={};
   if(manualOps){
-    drawSched = manualOps.map(o=>{ const dur=opDur(s,o), anes=opAnes(s,o), par=opMode(s,o)==='par'; return {type:o.type,skillType:o.skillType,label:o.label,color:o.color,sets:o.sets,shaver:o.shaver,dur,anes,tower:o.tower,start:o.start,end:o.start+dur,anesStart:o.start-anes,anesMode:par?'par':'room',_mid:o.id,_name:o.name||null}; });
+    drawSched = manualOps.map(o=>{ const dur=opDur(s,o), anes=opAnes(s,o), par=opMode(s,o)==='par'; return {type:o.type,skillType:o.skillType,label:o.label,color:o.color,sets:o.sets,shaver:o.shaver,dur,anes,tower:o.tower,start:o.start,end:o.start+dur,anesStart:o.start-anes,anesMode:par?'par':'room',_mid:o.id,_card:o._card||null,_name:o.name||null}; });
     conf = validateManual(s, manualOps);
-    lastPlan={sched:assignSets(s, drawSched), s, useCases:useCasesNow};   // срезы — по РУЧНОМУ расписанию
+    lastPlan={sched:assignSets(s, drawSched), s};   // срезы — по РУЧНОМУ расписанию
     const mEnd=drawSched.reduce((m,o)=>Math.max(m,o.end),0), cc=Object.keys(conf).length;
     $('kpi_total').textContent=manualOps.length; $('kpi_total').nextElementSibling.textContent='в ручном плане';
     $('kpi_makespan').textContent=manualOps.length?fmtTime(mEnd):'—';
@@ -1880,25 +1804,13 @@ function render(){
       : `<b style="color:var(--ok)">✓ Ручное расписание корректно.</b> ${manualOps.length} операц., конец в <b>${fmtTime(mEnd)}</b>.`;
     $('schedMode').innerHTML = `<span class="manbadge">Ручной режим</span> вы перетащили расписание · <button class="btn sm" onclick="exitManual()">↻ Вернуть авто-расписание</button>`;
   } else {
-    // фамилии на операциях: поимённый режим — из списка пациентов; числовой — из «Пациентов дня» (слот = k-я операция типа)
-    const occCnt={};
-    r.sched.slice().sort((a,b)=>a.oidx-b.oidx).forEach(o=>{
-      const el=order[o.oidx]; let key,k;
-      if(el&&el._slot){ const p=el._slot.lastIndexOf(':'); key=el._slot.slice(0,p); k=+el._slot.slice(p+1)||0; }
-      else { key=(el&&el._cid)||o.type; k=(occCnt[key]=(occCnt[key]||0)); occCnt[key]++; }
-      o._nkey=key; o._nocc=k;
-      o._name = useCasesNow ? (caseList[o.oidx]?caseLabel(caseList[o.oidx]):null)
-                            : ((dayNames[key]&&dayNames[key][k])||null);
-    });
-    lastOrderSlots=order.map(el=>el&&el._slot).filter(Boolean);
     drawSched = r.sched.map((o,i)=>Object.assign({_mid:'m'+i}, o));
     lastAutoSched = drawSched;
-    lastPlan={sched:r.sched, s, useCases:useCasesNow};   // срезы — по АВТО-расписанию
+    lastPlan={sched:r.sched, s};   // срезы — по АВТО-расписанию
     $('schedMode').innerHTML = `<span class="muted">Совет: операции можно перетаскивать ${matchMedia('(pointer:coarse)').matches?'пальцем':'мышью'} — поменять стол и сдвинуть время прямо на ленте.</span>`;
   }
   lastDrawSched=drawSched;   // для тап-меню операции на ленте
   drawGantt(s, drawSched, !!manualOps, conf);
-  renderDayNames(s, r.sched, order, useCasesNow);
   if(curSliceRole && $('sliceActions') && $('sliceActions').style.display==='flex') showSlice(curSliceRole);   // обновить показанный срез под текущий план
   drawCeilings(s);
   renderSter();
@@ -1924,56 +1836,6 @@ let lastAutoSched=[];   // последнее авто-расписание (д�
 let lastGanttDay=null;  // масштаб последней отрисовки ленты (на телефоне короче полного дня)
 let lastDrawSched=[];   // операции, нарисованные на ленте (для тап-меню)
 
-/* ---------- пациенты дня: номер и фамилия на операциях числового режима ---------- */
-// привязка: фамилия закреплена за k-й операцией своего типа (или своей операции) —
-// при изменении количеств чужие фамилии не слетают
-let dayNames={};        // {bankart:['Иванов',...], acl:[...], <id своей операции>:[...]}
-let dayNamesSig=null;
-let dayOrder=null;      // назначенные номера: массив слотов 'тип:k' в порядке очереди (null = авто-чередование)
-let lastDayRowSlots=[]; // слоты строк «Пациентов дня» в показанном порядке (для переназначения номера)
-let lastOrderSlots=[];  // все слоты текущего плана (включая не влезшие)
-function queueAssign(slot, v){
-  const list=lastDayRowSlots.slice(); const from=list.indexOf(slot); if(from<0){ render(); return; }
-  const to=Math.max(1, Math.min(list.length, Math.round(+v)||1))-1;
-  list.splice(from,1); list.splice(to,0,slot);
-  const rest=(lastOrderSlots||[]).filter(sl=>list.indexOf(sl)<0);   // не влезшие — в хвост очереди
-  dayOrder=list.concat(rest);
-  manualOps=null; saveSettings(); render();
-}
-function sanitizeNames(o){
-  const r={}; if(!o||typeof o!=='object') return r;
-  for(const k in o){ if(Array.isArray(o[k])) r[k]=o[k].map(x=>typeof x==='string'?x:''); }
-  return r;
-}
-function dayNamesSet(key,k,v){ if(!dayNames[key]) dayNames[key]=[]; dayNames[key][k]=v; /* перерисует глобальный input-слушатель */ }
-function renderDayNames(s, sched, order, uc){
-  const wrap=$('dayNamesWrap'), host=$('dayNamesRows'); if(!wrap||!host) return;
-  if(uc){ wrap.style.display='none'; return; }
-  wrap.style.display='';
-  const occ={};
-  const rows=sched.slice().sort((a,b)=>a.oidx-b.oidx).map(o=>{
-    let key,k;
-    if(o._nkey!=null){ key=o._nkey; k=o._nocc; }
-    else { const el=order&&order[o.oidx]; key=(el&&el._cid)||o.type; k=(occ[key]=(occ[key]||0)); occ[key]++; }
-    return {key,k,slot:key+':'+k,o};
-  }).sort((a,b)=>a.o.start-b.o.start||a.o.tower-b.o.tower);
-  lastDayRowSlots=rows.map(r=>r.slot);
-  const sig=rows.map(r=>r.slot).join('|');
-  if(sig!==dayNamesSig){
-    dayNamesSig=sig;
-    host.innerHTML=rows.map((r,i)=>`<div class="dnrow">`
-      +`<select class="dnord" title="номер в очереди — выберите новый, план перестроится" onchange="queueAssign('${r.slot}',this.value)">${rows.map((_,n)=>`<option value="${n+1}"${n===i?' selected':''}>${n+1}</option>`).join('')}</select>`
-      +`<span class="dot" style="background:${opColor(r.o)}"></span>`
-      +`<span class="dntm">${fmtTime(r.o.start)} · стол ${r.o.tower+1}</span><span class="dnttl">${escHtml(opLabel(r.o))}</span>`
-      +`<input type="text" class="cname" placeholder="фамилия" value="${escHtml((dayNames[r.key]&&dayNames[r.key][r.k])||'')}" oninput="dayNamesSet('${r.key}',${r.k},this.value)"></div>`).join('')
-      ||'<div class="note">операций в плане нет — задайте их выше</div>';
-  } else {
-    // состав плана не менялся — обновляем только времена, фокус в поле фамилии сохраняется
-    const tms=host.querySelectorAll('.dntm');
-    rows.forEach((r,i)=>{ if(tms[i]) tms[i].textContent=`${fmtTime(r.o.start)} · стол ${r.o.tower+1}`; });
-  }
-}
-
 /* ---------- «идёт день»: крупный диспетчерский экран ---------- */
 let liveSched=[];      // операции показанного плана (для кнопок «выполнена» с экрана)
 let liveLastHtml='';
@@ -1993,8 +1855,7 @@ function renderLive(){
   const p=planForSlice(), s=p.s, N=stationCount(s);
   liveSched=p.sched;
   const nm=o=>nameForOp(o,p);
-  const doneSet={}; doneLog.forEach(d=>{ doneSet[d.type+'|'+d.tower+'|'+Math.round(d.end)]=1; });
-  const isDone=o=>doneSet[(OPS[o.type]?o.type:'custom')+'|'+o.tower+'|'+Math.round(o.end)];
+  const isDone=o=>!!(o._card&&o._card.status==='done');
   // столы
   let ht='';
   for(let t=0;t<N;t++){
@@ -2059,23 +1920,11 @@ function markDoneFromPlan(withImpl){
   markDoneOp(o, withImpl);
 }
 function markDoneOp(o, withImpl){
-  const s=readState();
-  const isStd=!!OPS[o.type];
-  const entry={ id:Date.now()+'-'+Math.random().toString(36).slice(2,6),
-    type:isStd?o.type:'custom', end:Math.max(0,Math.min(o.end,s.day)), tower:o.tower,
-    pat:o._name||'' };
-  if(!isStd) entry.lbl=opLabel(o);
-  doneLog.push(entry);
-  // режим «остатка дня» НЕ трогаем: списание — не переключение планирования
-  saveSettings(); render();
-  if(withImpl){
-    [...document.querySelectorAll('details.acc')].forEach(d=>{ if(d.textContent.includes('Уже сделано')) d.open=true; });
-    openImplants(entry.id);
-    const e=$('implEditor'); if(e) e.scrollIntoView({block:'center',behavior:'smooth'});
-  }
+  const c=o&&(o._card||null); if(!c) return;
+  toggleCardDone(c.id, !!withImpl);   // карточка станет «выполнена»; импланты откроются там же, в «Операциях дня»
 }
 let drag=null;
-function enterManual(){ manualOps=(lastAutoSched||[]).map((o,i)=>({id:o._mid||('m'+i), type:o.type, tower:o.tower, start:o.start, name:o._name||null, label:o.label, color:o.color, sets:o.sets, shaver:o.shaver, dur:o.dur, anes:o.anes, anesMode:o.anesMode, skillType:o.skillType})); }
+function enterManual(){ manualOps=(lastAutoSched||[]).map((o,i)=>({id:o._mid||('m'+i), _card:o._card||null, type:o.type, tower:o.tower, start:o.start, name:o._name||null, label:o.label, color:o.color, sets:o.sets, shaver:o.shaver, dur:o.dur, anes:o.anes, anesMode:o.anesMode, skillType:o.skillType})); }
 function exitManual(){ manualOps=null; render(); }
 function lanesGeom(){ const L=document.querySelectorAll('#gantt .lane'); const tops=[...L].map(l=>l.getBoundingClientRect().top); const step=tops.length>1?(tops[1]-tops[0]):44; return {count:L.length, step:step||44}; }
 // проверка ручного расписания: наложение на столе, выход за окно, нехватка наборов (стерилизация)
@@ -2241,11 +2090,24 @@ function drawCeilings(s){
   $('ceilingBody').innerHTML=render._ceil;
 }
 
-function applyMix(mix){ manualOps=null; if(useCases){useCases=false; const c=$('use_cases'); if(c)c.checked=false;} TYPES.forEach(t=>$('m_'+t).value=mix[t]||0); render(); }
-function maximize(){ applyMix(fillToMax(readState(), readState().mix)); }
+// заменить план карточками по счётчикам типов (гипотетические загрузчики сценариев)
+function applyMix(mix){
+  if(planCards().some(c=>c.name&&c.name.trim()) && !confirm('Заменить текущий план? Вписанные фамилии будут убраны.')) return;
+  const done=doneCards(); const out=[];
+  TYPES.forEach(t=>{ for(let i=0;i<Math.max(0,Math.round(mix[t]||0));i++) out.push({id:newCardId(), type:t, label:'', joint:'knee', dur:null, name:'', status:'plan', doneEnd:null, tower:0, implants:[]}); });
+  cards=done.concat(sanitizeCards(out)); cardsRenderedSig=null;
+  manualOps=null; saveSettings(); render();
+}
+// «Максимум в этих пропорциях»: ДОБАВИТЬ безымянных карточек, не трогая существующие
+function maximize(){
+  const s=readState();
+  const fixed=planCards().map(c=>cardSpecOf(s,c));
+  const add=fillToMax(s, s.mix, fixed);
+  TYPES.forEach(t=>{ for(let i=0;i<(add[t]||0);i++) cards.push({id:newCardId(), type:t, label:'', joint:'knee', dur:null, name:'', status:'plan', doneEnd:null, tower:0, implants:[]}); });
+  manualOps=null; saveSettings(); render();
+}
 function loadAbsoluteMax(){ const s=readState(); applyMix(fillToMax(s,{meniscus:1})); }
 function loadScenario(i){ if(lastScenarioMixes[i]) applyMix(lastScenarioMixes[i]); }
-function setMix(v){ manualOps=null; if(useCases){useCases=false; const c=$('use_cases'); if(c)c.checked=false;} TYPES.forEach(t=>$('m_'+t).value=v); if(v===0){ customList.forEach(c=>c.count=0); customRenderedIds=null; } render(); }
 function resetInv(){
   manualOps=null;
   $('inv_towers').value=3; $('inv_optics').value=17; $('inv_shavers').value=15;
@@ -2385,7 +2247,7 @@ function renderSter(){
 // изменение настроек/плана сбрасывает ручную раскладку (иначе она устаревает: геометрия, фантомные столы);
 // поля-формы, которые сами по себе план не меняют (дата, заготовки журнала/блокировок), раскладку не трогают
 const MANUAL_KEEP_IDS=['p_date','done_type','done_end','done_tower','blk_station','blk_from','blk_to','preset_sel','impl_pat','impl_name','impl_qty'];
-document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor') || e.target.closest('#dayNamesRows')))){ manualOps=null; } render(); });
+document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor') || e.target.closest('#cardList')))){ manualOps=null; } render(); });
 // колесо мыши над числовым полем не должно менять значение, но и не выбивать фокус при прокрутке страницы
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(()=>{ renderSter(); renderLive(); },1000);
