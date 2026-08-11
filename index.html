@@ -199,9 +199,9 @@
   .crow .ckb.on{background:var(--ok);border-color:var(--ok);color:#fff}
   .crow.cdone{opacity:.62}
   .crow.cdone .cpat{text-decoration:line-through}
-  .crow .dragh{cursor:grab;color:var(--muted);font-size:17px;padding:4px 2px;flex:0 0 auto;touch-action:none;user-select:none}
-  .crow .dragh:active{cursor:grabbing;color:var(--accent)}
-  .sortable-ghost{opacity:.35;background:var(--panel2)}
+  .mvbtns{display:inline-flex;gap:4px;flex:0 0 auto}
+  .mvbtns button{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:13px;cursor:pointer;line-height:1}
+  .mvbtns button:active{background:var(--accent);color:#fff}
   .crow .dnord{width:54px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 4px;font-size:14px;text-align:center;font-weight:600;cursor:pointer}
   /* списание имплантов */
   .implbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px}
@@ -567,7 +567,8 @@
       </div>
     </details>
     <div class="btnrow" style="margin-top:12px">
-      <button class="btn primary" onclick="maximize()">Максимум в этих пропорциях</button>
+      <button class="btn primary" onclick="bestCardOrder()" title="перебрать порядки: максимум влезает, конец дня раньше">⚡ Лучший порядок</button>
+      <button class="btn" onclick="maximize()">Максимум в этих пропорциях</button>
       <button class="btn" onclick="loadAbsoluteMax()" title="Самые короткие операции (мениск) — максимальное число, но клинически это мениск-день">Абс. максимум (мениск-день)</button>
       <button class="btn" onclick="clearPlanCards()">Обнулить</button>
     </div>
@@ -756,7 +757,6 @@
 </div>
 </div>
 
-<script src="sortable.min.js"></script>
 <script>
 const OPS = {
   bankart:  {label:'Банкарт',     short:'Б',  sets:['shoulder'],       shaver:false, color:'var(--bankart)'},
@@ -886,14 +886,6 @@ let curSlice='';          // текущий показанный срез (те�
 function planForSlice(){ if(lastPlan&&lastPlan.sched) return lastPlan; const s=readState(); const order=planCards().map(c=>cardSpecOf(s,c)); return {sched:simulate(s,order).sched, s}; }
 function nameForOp(o,p){ return o._name || (o._card&&o._card.name&&o._card.name.trim()) || opLabel(o); }
 let curSliceRole=null;   // какой срez сейчас показан — чтобы обновлять при смене плана
-function assignSets(s, ops){   // назначить наборы для ручной раскладки (как simulate) — для срезов ЦСО
-  const P={shoulder:pool(s.inv.sets.shoulder),acl:pool(s.inv.sets.acl),meniscus:pool(s.inv.sets.meniscus),latarjet:pool(s.inv.sets.latarjet)};
-  return ops.slice().sort((a,b)=>a.start-b.start).map(o=>{ const cats=opSets(o); let pk=null;
-    for(const c of cats){const arr=P[c];for(let i=0;i<arr.length;i++){if(arr[i]<=o.start+0.5&&(pk===null||arr[i]<pk.t))pk={cat:c,idx:i,t:arr[i]};}}
-    if(!pk){for(const c of cats){const arr=P[c];for(let i=0;i<arr.length;i++){if(pk===null||arr[i]<pk.t)pk={cat:c,idx:i,t:arr[i]};}}}
-    const dur=opDur(s,o); if(pk)P[pk.cat][pk.idx]=o.start+dur+s.ster;
-    return Object.assign({},o,{setCat:pk?pk.cat:cats[0],setIdx:pk?pk.idx:0}); });
-}
 function sliceCSO(){ const p=planForSlice(), s=p.s; const rows=p.sched.slice().sort((a,b)=>a.end-b.end).map(o=>`${fmtTime(o.end)}  ${setName(o.setCat,o.setIdx)} (${SET_SHORT[o.setCat]||o.setCat}) — после: ${nameForOp(o,p)}, стол ${o.tower+1} → стерилизация до ${fmtTime(o.end+s.ster)}`); return `ЦСО — наборы на стерилизацию (стерилизация ${Math.round(s.ster)} мин)\n\n`+(rows.join('\n')||'нет операций'); }
 function sliceAnest(){ const p=planForSlice(); const rows=p.sched.slice().sort((a,b)=>(a.anesStart!=null?a.anesStart:a.start)-(b.anesStart!=null?b.anesStart:b.start)).map(o=>{ const par=o.anesMode==='par'; const ind=Math.max(0,(o.anesStart!=null?o.anesStart:o.start)); return `${fmtTime(ind)}  индукция: ${nameForOp(o,p)} — ${opLabel(o)}, ${par?'в зале (параллельно)':'на столе'} → операция ${fmtTime(o.start)}, стол ${o.tower+1}`; }); return `Анестезиолог — порядок индукций\n\n`+(rows.join('\n')||'нет операций'); }
 function sliceTables(){ const p=planForSlice(), N=stationCount(p.s); let out='Операционная — по столам\n'; for(let t=0;t<N;t++){ const onT=p.sched.filter(o=>o.tower===t).sort((a,b)=>a.start-b.start); out+=`\nСтол ${t+1}:\n`+(onT.map(o=>`  ${fmtTime(o.start)}–${fmtTime(o.end)}  ${nameForOp(o,p)} — ${opLabel(o)}`).join('\n')||'  —'); } return out; }
@@ -978,6 +970,27 @@ function cardMove(id,pos){
   cards.splice(idx,0,c);
   manualOps=null; saveSettings(); render();
 }
+function cardShift(id,d){
+  const plan=planCards(); const i=plan.indexOf(cards.find(x=>x.id===id)); if(i<0) return;
+  const j=i+d; if(j<0||j>=plan.length) return;
+  cardMove(id, j+1);
+}
+// перебор порядков: максимум влезает, при равенстве — раньше заканчиваем (LPT/SPT/дефицит/случайные)
+function bestCardOrder(){
+  const s=readState(); const plan=planCards(); if(plan.length<2) return;
+  const w=c=>{ const sp=opSpec(s,cardSpecOf(s,c)); return ((sp.anesMode==='par')?0:sp.anes)+sp.dur; };
+  const ceilMap={}; TYPES.forEach(t=>ceilMap[t]=ceiling(s,t).n);
+  const cand=[plan.slice(), plan.slice().sort((a,b)=>w(b)-w(a)), plan.slice().sort((a,b)=>w(a)-w(b)),
+    plan.slice().sort((a,b)=>(ceilMap[a.type]||99)-(ceilMap[b.type]||99))];
+  for(let k=0;k<300;k++){ const a=plan.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} cand.push(a); }
+  let best=plan, bf=-1, bm=Infinity;
+  for(const c of cand){ const r=simulate(s, c.map(x=>cardSpecOf(s,x)));
+    const fit=r.sched.length, mk=r.sched.reduce((m,o)=>Math.max(m,o.end),0);
+    if(fit>bf || (fit===bf && mk<bm)){ bf=fit; bm=mk; best=c; } }
+  // собрать массив: выполненные на местах, плановые в лучшем порядке
+  let bi=0; cards=cards.map(c=>c.status==='done'?c:best[bi++]);
+  cardsRenderedSig=null; manualOps=null; saveSettings(); render();
+}
 function clearPlanCards(){
   if(planCards().length && !confirm('Убрать все незавершённые операции из плана?')) return;
   cards=doneCards(); manualOps=null; saveSettings(); render();
@@ -1007,16 +1020,15 @@ function renderCards(s, sched){
       const done=c.status==='done'; const p=done?0:(++pos);
       const typeSel=`<select class="blk ctype" onchange="cardSet('${c.id}','type',this.value);render()"${done?' disabled':''}>${TYPES.map(t=>`<option value="${t}"${c.type===t?' selected':''}>${OPS[t].label}</option>`).join('')}<option value="custom"${c.type==='custom'?' selected':''}>Другое…</option></select>`;
       const custom=c.type==='custom'?`<input type="text" class="cname clbl" placeholder="Название" value="${escHtml(c.label)}" oninput="cardSet('${c.id}','label',this.value)"><select class="blk" onchange="cardSet('${c.id}','joint',this.value);render()"${done?' disabled':''}>${Object.keys(JOINTS).map(j=>`<option value="${j}"${((c.joint&&JOINTS[c.joint])?c.joint:'knee')===j?' selected':''}>${JOINTS[j].label}</option>`).join('')}</select><input type="number" class="cdur" min="5" step="5" value="${c.dur||45}" title="длительность, мин" oninput="cardSet('${c.id}','dur',this.value)">`:'';
-      const ord=done?'<span class="cnum">✓</span>':`<select class="dnord" title="номер в очереди" onchange="cardMove('${c.id}',this.value)">${Array.from({length:nPlan},(_,n)=>`<option value="${n+1}"${n+1===p?' selected':''}>${n+1}</option>`).join('')}</select>`;
+      const ord=done?'<span class="cnum">✓</span>':`<select class="dnord" title="номер в очереди" onchange="cardMove('${c.id}',this.value)">${Array.from({length:nPlan},(_,n)=>`<option value="${n+1}"${n+1===p?' selected':''}>${n+1}</option>`).join('')}</select><span class="mvbtns"><button onclick="cardShift('${c.id}',-1)" title="раньше">▲</button><button onclick="cardShift('${c.id}',1)" title="позже">▼</button></span>`;
       const ni=(c.implants||[]).reduce((a,x)=>a+(+x.q||0),0);
       const impl=done?`<button class="implbtn${ni?' has':''}" onclick="openImplants('${c.id}')" title="списать импланты">${ni?'имп. '+ni:'+ имп.'}</button>`:'';
-      return `<div class="caserow crow${done?' cdone':''}" data-id="${c.id}"><span class="dragh" title="перетащите, чтобы изменить порядок">⠿</span>${ord}<span class="dot" style="background:${cardColor(c)}"></span>${typeSel}${custom}`
+      return `<div class="caserow crow${done?' cdone':''}" data-id="${c.id}">${ord}<span class="dot" style="background:${cardColor(c)}"></span>${typeSel}${custom}`
         +`<input type="text" class="cname cpat" placeholder="фамилия" value="${escHtml(c.name)}" oninput="cardSet('${c.id}','name',this.value)">`
         +`<span class="cfit" id="cfit-${c.id}"></span>${impl}`
         +`<button class="ckb${done?' on':''}" onclick="toggleCardDone('${c.id}')" title="${done?'выполнена — нажмите, чтобы вернуть в план':'отметить выполненной'}">✓</button>`
         +`<button class="x" onclick="removeCard('${c.id}')" title="убрать">×</button></div>`;
     }).join('')||'<div class="note">Операций пока нет — добавьте кнопками «+» выше или через «Быстрый план».</div>';
-    setupCardSortable();
   }
   cards.forEach(c=>{ const el=$('cfit-'+c.id); if(!el) return;
     if(c.status==='done'){ el.innerHTML=`<span class="pill ok">до ${minToClock(c.doneEnd||0)} · стол ${(c.tower||0)+1}</span>`; return; }
@@ -1028,21 +1040,6 @@ function renderCards(s, sched){
       return `<span class="qa"><span class="dot" style="background:${OPS[t].color}"></span><span class="qan">${OPS[t].short}</span><button onclick="removeLastCard('${t}')" title="убрать одну">−</button><b>${n}</b><button onclick="addCard('${t}')" title="добавить">+</button></span>`; }).join('');
   }
   const ch=$('cardsHint'); if(ch){ const d=doneCards().length; ch.textContent=`${nPlan} в плане${d?` · ${d} выполнено`:''}`; }
-}
-function setupCardSortable(){
-  const host=$('cardList'); if(!host || typeof Sortable==='undefined') return;
-  if(host._sortable){ host._sortable.destroy(); host._sortable=null; }
-  if(!host.querySelector('.crow')) return;
-  host._sortable=new Sortable(host,{
-    handle:'.dragh', animation:150, delay:0,
-    onEnd:()=>{
-      const ids=[...host.querySelectorAll('.crow')].map(el=>el.getAttribute('data-id'));
-      const byId={}; cards.forEach(c=>byId[c.id]=c);
-      const next=ids.map(id=>byId[id]).filter(Boolean);
-      cards.forEach(c=>{ if(next.indexOf(c)<0) next.push(c); });
-      cards=next; cardsRenderedSig=null; manualOps=null; saveSettings(); render();
-    }
-  });
 }
 /* ---------- разделы (как в банковском приложении): День · Срезы · Настройки ---------- */
 let curTab='day';
@@ -1844,30 +1841,12 @@ function render(){
   $('bottleneckNote').innerHTML=bn;
   $('bottleneckNote').className='statusline'+(total===0?(plannedN>0?' bad':' idle'):(rej>0?' bad':' ok'));
 
-  // расписание: авто или ручное (перетаскивание мышью)
-  let drawSched, conf={};
-  if(manualOps){
-    drawSched = manualOps.map(o=>{ const dur=opDur(s,o), anes=opAnes(s,o), par=opMode(s,o)==='par'; return {type:o.type,skillType:o.skillType,label:o.label,color:o.color,sets:o.sets,shaver:o.shaver,dur,anes,tower:o.tower,start:o.start,end:o.start+dur,anesStart:o.start-anes,anesMode:par?'par':'room',_mid:o.id,_card:o._card||null,_name:o.name||null}; });
-    conf = validateManual(s, manualOps);
-    lastPlan={sched:assignSets(s, drawSched), s};   // срезы — по РУЧНОМУ расписанию
-    const mEnd=drawSched.reduce((m,o)=>Math.max(m,o.end),0), cc=Object.keys(conf).length;
-    $('kpi_total').textContent=manualOps.length; $('kpi_total').nextElementSibling.textContent='в ручном плане';
-    $('kpi_makespan').textContent=manualOps.length?fmtTime(mEnd):'—';
-    $('kpi_tables').textContent=new Set(manualOps.map(o=>o.tower)).size+' / '+N;
-    $('kpi_rej').textContent=cc; $('kpi_rej_card').className='kpi'+(cc>0?' bad':' good');
-    $('bottleneckNote').className='statusline'+(cc>0?' bad':' ok');
-    $('bottleneckNote').innerHTML = cc>0
-      ? `<b style="color:var(--bad)">Ручное расписание: ${cc} конфликт(ов).</b> Наведите на красные блоки — там причина. Или верните авто-расписание.`
-      : `<b style="color:var(--ok)">✓ Ручное расписание корректно.</b> ${manualOps.length} операц., конец в <b>${fmtTime(mEnd)}</b>.`;
-    $('schedMode').innerHTML = `<span class="manbadge">Ручной режим</span> вы перетащили расписание · <button class="btn sm" onclick="exitManual()">↻ Вернуть авто-расписание</button>`;
-  } else {
-    drawSched = r.sched.map((o,i)=>Object.assign({_mid:'m'+i}, o));
-    lastAutoSched = drawSched;
-    lastPlan={sched:r.sched, s};   // срезы — по АВТО-расписанию
-    $('schedMode').innerHTML = `<span class="muted">Совет: операции можно перетаскивать ${matchMedia('(pointer:coarse)').matches?'пальцем':'мышью'} — поменять стол и сдвинуть время прямо на ленте.</span>`;
-  }
+  // расписание всегда авто: порядок задаётся в «Операциях дня», раскладку по столам считает движок
+  const drawSched = r.sched.map((o,i)=>Object.assign({_mid:'m'+i}, o));
+  lastPlan={sched:r.sched, s};
+  $('schedMode').innerHTML = `<span class="muted">Тап по операции на ленте — отметить выполненной и списать импланты.</span>`;
   lastDrawSched=drawSched;   // для тап-меню операции на ленте
-  drawGantt(s, drawSched, !!manualOps, conf);
+  drawGantt(s, drawSched, false, {});
   if(curSliceRole && $('sliceActions') && $('sliceActions').style.display==='flex') showSlice(curSliceRole);   // обновить показанный срез под текущий план
   drawCeilings(s);
   renderSter();
@@ -1981,87 +1960,21 @@ function markDoneOp(o, withImpl){
   toggleCardDone(c.id, !!withImpl);   // карточка станет «выполнена»; импланты откроются там же, в «Операциях дня»
 }
 let drag=null;
-function enterManual(){ manualOps=(lastAutoSched||[]).map((o,i)=>({id:o._mid||('m'+i), _card:o._card||null, type:o.type, tower:o.tower, start:o.start, name:o._name||null, label:o.label, color:o.color, sets:o.sets, shaver:o.shaver, dur:o.dur, anes:o.anes, anesMode:o.anesMode, skillType:o.skillType})); }
-function exitManual(){ manualOps=null; render(); }
-function lanesGeom(){ const L=document.querySelectorAll('#gantt .lane'); const tops=[...L].map(l=>l.getBoundingClientRect().top); const step=tops.length>1?(tops[1]-tops[0]):44; return {count:L.length, step:step||44}; }
-// проверка ручного расписания: наложение на столе, выход за окно, нехватка наборов (стерилизация)
-function validateManual(s, ops){
-  const conf={}, N=stationCount(s), add=(id,t)=>{conf[id]=(conf[id]?conf[id]+'; ':'')+t;};
-  const blk=blocksByStation(s.blocks, N, s.day);
-  ops.forEach(o=>{ if(o.tower<0 || o.tower>=N) add(o.id,'стол отключён'); });   // осиротевшая операция (стол убрали)
-  for(let t=0;t<N;t++){
-    const win=s.tableWin[t]||{from:0,to:s.day};
-    const onT=ops.filter(o=>o.tower===t).map(o=>{const dur=opDur(s,o),anes=opAnes(s,o),par=opMode(s,o)==='par';return {o,occStart:par?o.start:o.start-anes,end:o.start+dur};}).sort((a,b)=>a.occStart-b.occStart);
-    for(let i=0;i<onT.length;i++){
-      const a=onT[i];
-      if(a.occStart<win.from-0.5 || a.end>win.to+0.5) add(a.o.id,'вне рабочего окна стола');
-      if(s.nowFloor>0 && a.occStart < s.nowFloor-0.5) add(a.o.id,'раньше текущего времени');
-      for(const iv of (blk[t]||[])){ if(a.occStart < iv[1]-0.5 && a.end > iv[0]+0.5){ add(a.o.id,'в закрытое время'); break; } }
-      if(i>0){ const prev=onT[i-1]; if(a.occStart < prev.end+(s.turnover||0)-0.5){ add(a.o.id,'наложение на столе'); add(prev.o.id,'наложение на столе'); } }
-    }
-  }
-  // бригады анестезиологов: одновременных индукций не больше их числа
-  const iv2=[]; ops.forEach(o=>{ const a=opAnes(s,o); if(a>0) iv2.push({o, s:o.start-a, e:o.start}); });
-  iv2.sort((x,y)=>x.s-y.s);
-  const act=[];
-  for(const x of iv2){
-    for(let i=act.length-1;i>=0;i--) if(act[i].e<=x.s+0.5) act.splice(i,1);
-    act.push(x);
-    if(act.length>(s.anesTeams||1)) add(x.o.id,'анестезиолог занят (индукции внахлёст)');
-  }
-  const pool={};
-  ops.slice().sort((a,b)=>a.start-b.start).forEach(o=>{
-    const dur=opDur(s,o), cats=opSets(o); let ok=false;
-    for(const c of cats){
-      if(!pool[c]){ pool[c]=new Array(Math.max(0,Math.round(s.inv.sets[c]))).fill(-1e9);
-        // живые таймеры стерилизации: конкретные наборы недоступны до готовности и в ручном режиме
-        if(s.useDoneLog&&s.setReadyMin) for(const k in s.setReadyMin){ const q=k.lastIndexOf('-'); if(k.slice(0,q)===c){ const j=+k.slice(q+1); if(pool[c][j]!=null) pool[c][j]=Math.max(pool[c][j], s.setReadyMin[k]); } }
-      }
-      const arr=pool[c]; let idx=-1,best=Infinity;
-      for(let i=0;i<arr.length;i++){ if(arr[i]<=o.start+0.5 && arr[i]<best){best=arr[i];idx=i;} }
-      if(idx>=0){ arr[idx]=o.start+dur+s.ster; ok=true; break; }
-    }
-    if(!ok) add(o.id,'нет свободного набора (стерилизация)');
-  });
-  return conf;
-}
 function setupGanttDrag(){
-  // pointer-события вместо mouse: перетаскивание работает и пальцем на планшете/телефоне
+  // перетаскивание убрано: короткий тап по блоку открывает меню «выполнена + импланты»
   const g=$('gantt'); if(!g || g._dragReady) return; g._dragReady=true;
   g.addEventListener('pointerdown', e=>{
     if(e.pointerType==='mouse' && e.button!==0) return;
     const op=e.target.closest('.op'); if(!op || op.classList.contains('donep') || op.getAttribute('data-mid')==null) return;
-    const track=op.parentElement, st=readState();
-    drag={ el:op, mid:op.getAttribute('data-mid'), startX:e.clientX, startY:e.clientY, moved:false,
-           trackW:(track.getBoundingClientRect().width||track.clientWidth||0), day:(lastGanttDay||st.day), lanes:lanesGeom(), origTower:0, origStart:0 };
-    e.preventDefault();
-  });
-  window.addEventListener('pointermove', e=>{
-    if(!drag) return;
-    const dx=e.clientX-drag.startX, dy=e.clientY-drag.startY;
-    if(!drag.moved){ if(Math.abs(dx)<4 && Math.abs(dy)<4) return;
-      drag.moved=true; if(!manualOps) enterManual();
-      const mo=manualOps.find(o=>o.id===drag.mid); if(mo){drag.origTower=mo.tower; drag.origStart=mo.start;}
-      drag.el.style.zIndex=30; drag.el.style.opacity='.85'; document.body.style.userSelect='none';
-    }
-    drag.el.style.transform=`translate(${dx}px,${dy}px)`;
+    drag={mid:op.getAttribute('data-mid'), x:e.clientX, y:e.clientY};
   });
   window.addEventListener('pointerup', e=>{
     if(!drag) return;
-    if(!drag.moved){ const mid=drag.mid; drag=null; openOpMenu(mid); return; }   // тап без движения = меню операции
-    if(drag.moved){
-      const dx=e.clientX-drag.startX, dy=e.clientY-drag.startY;
-      const dMin=drag.trackW>10 ? Math.round((dx/drag.trackW*drag.day)/5)*5 : 0;   // если ширину не измерить — только смена стола
-      const mo=manualOps && manualOps.find(o=>o.id===drag.mid);
-      if(mo){ let nt=drag.origTower+Math.round(dy/(drag.lanes.step||44)); nt=Math.max(0,Math.min(drag.lanes.count-1,nt)); mo.tower=nt; mo.start=Math.max(0,Math.min(drag.day,drag.origStart+dMin)); }
-      document.body.style.userSelect=''; render();
-    }
+    const mid=drag.mid, moved=Math.abs(e.clientX-drag.x)>8||Math.abs(e.clientY-drag.y)>8;
     drag=null;
+    if(!moved) openOpMenu(mid);
   });
-  window.addEventListener('pointercancel', ()=>{
-    if(drag && drag.moved){ document.body.style.userSelect=''; render(); }   // жест прерван системой — вернуть блок на место
-    drag=null;
-  });
+  window.addEventListener('pointercancel', ()=>{ drag=null; });
 }
 function drawGantt(s, sched, manual, conf){
   conf=conf||{};
@@ -2113,11 +2026,11 @@ function drawGantt(s, sched, manual, conf){
       const left=o.start/day*100, w=(o.end-o.start)/day*100;
       const atitle=par?' · анестезия в зале параллельно (стол свободен)':' · анестезия на столе с '+fmtTime(Math.max(0,o.anesStart!=null?o.anesStart:o.start));
       const mid=o._mid!=null?` data-mid="${o._mid}"`:'';
-      const cflict=(manual && conf[o._mid])?' conflict':'';
-      const cft=(manual && conf[o._mid])?` ⚠ ${conf[o._mid]}`:'';
+      const cflict='';
+      const cft='';
       const oplabel=escHtml(o._name?o._name:opLabel(o));
       const optitle=escHtml((o._name?o._name+' · ':'')+opLabel(o));
-      ops+=`<div class="op${par?' parop':''}${manual?' draggable':''}${cflict}"${mid} style="left:${left}%;width:${w}%;background:${opColor(o)}" title="${optitle} ${fmtTime(o.start)}–${fmtTime(o.end)}${atitle}${cft}">${oplabel}</div>`;
+      ops+=`<div class="op${par?' parop':''}${cflict}"${mid} style="left:${left}%;width:${w}%;background:${opColor(o)}" title="${optitle} ${fmtTime(o.start)}–${fmtTime(o.end)}${atitle}${cft}">${oplabel}</div>`;
     });
     if(s.useDoneLog && s.nowFloor>0 && s.nowFloor<day) ops+=`<div class="nowline" style="left:${s.nowFloor/day*100}%" title="Сейчас ${fmtTime(s.nowFloor)}"></div>`;
     body+=`<div class="lane"><div class="name">Стол ${lane+1}</div><div class="track">${ops}</div></div>`;
