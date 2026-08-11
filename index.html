@@ -174,6 +174,18 @@
   .lset b.zero{color:var(--bad)}
   .lset .lsrun{color:var(--warn);font-variant-numeric:tabular-nums}
   #opMenu{z-index:110}
+  /* разделы: сегменты сверху (десктоп) / таб-бар снизу (телефон) */
+  .tabbar{display:flex;gap:6px;max-width:1080px;margin:14px auto 0;padding:5px;background:var(--panel);border:1px solid var(--line);border-radius:12px;width:fit-content}
+  .tabbar button{display:inline-flex;align-items:center;gap:7px;border:none;background:none;border-radius:9px;padding:9px 18px;font-size:14px;color:var(--muted);cursor:pointer;font-weight:600}
+  .tabbar button.on{background:var(--accent);color:#fff}
+  .tabbar .ti{font-size:15px}
+  @media(max-width:700px){
+    .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:80;margin:0;width:auto;max-width:none;border-radius:0;border:none;border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -2px 14px rgba(16,24,40,.08)}
+    .tabbar button{flex:1;flex-direction:column;gap:2px;padding:6px 4px;font-size:11.5px}
+    .tabbar .ti{font-size:20px}
+    body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  }
+  @media print{ .tabbar{display:none} [data-tab]{display:block !important} }
   /* доска дня: быстрые добавления и карточки */
   .addrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
   .qa{display:inline-flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:5px 7px 5px 11px;font-size:13px}
@@ -461,6 +473,12 @@
   </div>
 </div>
 
+<nav class="tabbar noprint">
+  <button data-t="day" class="on" onclick="showTab('day')"><span class="ti">🗓</span><span>День</span></button>
+  <button data-t="reports" onclick="showTab('reports')"><span class="ti">📋</span><span>Срезы</span></button>
+  <button data-t="settings" onclick="showTab('settings')"><span class="ti">⚙️</span><span>Настройки</span></button>
+</nav>
+
 <!-- БЫСТРЫЙ ПЛАН: стартовый экран-калькулятор (особенно для телефона) -->
 <div id="wizard" class="wiz noprint" style="display:none">
   <div class="wizcard">
@@ -507,12 +525,12 @@
 <div class="grid">
 
   <!-- ШАБЛОНЫ ДНЯ -->
-  <div class="card presetbar">
+  <div class="card presetbar" data-tab="day">
     <div class="weekrow noprint" id="weekRow"></div>
   </div>
 
   <!-- ГЕРОЙ: результат сразу -->
-  <div class="hero">
+  <div class="hero" data-tab="day">
     <div class="kpis">
       <div class="kpi acc emph"><div class="num" id="kpi_total">—</div><div class="lbl">успею сегодня</div></div>
       <div class="kpi good"><div class="num" id="kpi_makespan">—</div><div class="lbl">закончу в</div></div>
@@ -524,7 +542,7 @@
   </div>
 
   <!-- РАСПИСАНИЕ: главный визуал -->
-  <div class="card schedCard">
+  <div class="card schedCard" data-tab="day">
     <h2>Расписание дня</h2>
     <div id="schedMode"></div>
     <div class="gantt" id="gantt"></div>
@@ -536,7 +554,7 @@
   </div>
 
   <!-- ДОСКА ДНЯ: одна сущность — карточка операции (время·пациент·тип·статус), как на доске оперблока -->
-  <div class="card">
+  <div class="card" data-tab="day">
     <h2>Операции дня <span class="soft" id="cardsHint"></span></h2>
     <div class="addrow" id="quickAdd"></div>
     <div id="cardList"></div>
@@ -572,7 +590,7 @@
   </div>
 
   <!-- СРЕЗЫ ДЛЯ БРИГАДЫ -->
-  <details class="acc">
+  <details class="acc" data-tab="reports">
     <summary>Срезы для бригады<span class="acc-hint">медсестра · ЦСО · анестезиолог · столы — печать/копия</span><span class="chev">▾</span></summary>
     <div class="acc-body">
       <div class="note">Раздай каждому участнику только его часть готового плана — распечатай или скопируй в сообщение. Меньше лишнего, проще принять (туда, где привычка уже есть).</div>
@@ -595,7 +613,7 @@
 
 
   <!-- ШАБЛОНЫ ДНЯ И РЕЗЕРВНАЯ КОПИЯ -->
-  <details class="acc">
+  <details class="acc" data-tab="settings">
     <summary>Шаблоны дня и резервная копия<span class="acc-hint">«Плечевой день» одним кликом · экспорт/импорт</span><span class="chev">▾</span></summary>
     <div class="acc-body">
       <div class="presetrow" style="margin-top:8px">
@@ -613,7 +631,7 @@
   </details>
 
   <!-- ОСТАТОК ДНЯ -->
-  <details class="acc">
+  <details class="acc" data-tab="day">
     <summary>Уже сделано — планирую остаток дня<span class="acc-hint" id="accDoneHint"></span><span class="chev">▾</span></summary>
     <div class="acc-body">
       <div class="row"><label>Считать только остаток дня <span class="sub">с текущего момента, а не с 08:00</span></label><input type="checkbox" id="use_done" onchange="toggleDone(this.checked)"></div>
@@ -623,7 +641,7 @@
   </details>
 
   <!-- СТОЛЫ И ВРЕМЯ -->
-  <details class="acc">
+  <details class="acc" data-tab="settings">
     <summary>Столы и время<span class="acc-hint" id="accDayHint"></span><span class="chev">▾</span></summary>
     <div class="acc-body">
       <div class="row"><label>Хирургические столы <span class="sub">сколько идёт параллельно</span></label><input type="number" id="p_tables" value="3" min="1"></div>
@@ -652,7 +670,7 @@
   </details>
 
   <!-- ДЛИТЕЛЬНОСТЬ И АНЕСТЕЗИЯ -->
-  <details class="acc">
+  <details class="acc" data-tab="settings">
     <summary>Длительность и анестезия операций<span class="acc-hint">минуты по каждому типу</span><span class="chev">▾</span></summary>
     <div class="acc-body">
       <h3>Длительность операции (мин)</h3>
@@ -673,7 +691,7 @@
   </details>
 
   <!-- РЕСУРСЫ И ХИРУРГИ -->
-  <details class="acc">
+  <details class="acc" data-tab="settings">
     <summary>Ресурсы и хирурги<span class="acc-hint" id="accResHint"></span><span class="chev">▾</span></summary>
     <div class="acc-body" id="invCard">
       <h3>Наборы инструментов</h3>
@@ -696,7 +714,7 @@
   </details>
 
   <!-- СТЕРИЛИЗАЦИЯ -->
-  <details class="acc">
+  <details class="acc" data-tab="day">
     <summary>Стерилизация — живой таймер<span class="acc-hint">отметить наборы в стерилизации</span><span class="chev">▾</span></summary>
     <div class="acc-body" id="sterCard">
       <div id="sterRows"></div>
@@ -706,7 +724,7 @@
   </details>
 
   <!-- АНАЛИЗ ДНЯ -->
-  <details class="acc">
+  <details class="acc" data-tab="reports">
     <summary>Анализ дня — сценарии и пределы<span class="acc-hint">где больше всего операций</span><span class="chev">▾</span></summary>
     <div class="acc-body">
       <h3>Загрузка ресурсов</h3>
@@ -1025,6 +1043,16 @@ function setupCardSortable(){
       cards=next; cardsRenderedSig=null; manualOps=null; saveSettings(); render();
     }
   });
+}
+/* ---------- разделы (как в банковском приложении): День · Срезы · Настройки ---------- */
+let curTab='day';
+function showTab(t){
+  curTab=t;
+  document.querySelectorAll('[data-tab]').forEach(el=>{ el.style.display = el.getAttribute('data-tab')===t?'':'none'; });
+  document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('on', b.getAttribute('data-t')===t));
+  if(t==='reports'){ document.querySelectorAll('details.acc[data-tab="reports"]').forEach(d=>d.open=true); }
+  try{ localStorage.setItem('arthroTab1', t); }catch(e){}
+  window.scrollTo(0,0);
 }
 function toggleDone(v){ useDoneLog=v; saveSettings(); render(); }
 
@@ -2291,6 +2319,7 @@ loadSettings();
 renderPresets();
 render();
 setupGanttDrag();
+(function(){ let t='day'; try{ t=localStorage.getItem('arthroTab1')||'day'; }catch(e){} showTab(['day','reports','settings'].indexOf(t)>=0?t:'day'); })();
 // PWA: офлайн-кэш и установка на домашний экран
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 // быстрый план — стартовый экран: всплывает при ПЕРВОМ заходе за день (даже если
