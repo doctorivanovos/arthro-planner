@@ -126,12 +126,21 @@
   .wizchips{display:flex;flex-wrap:wrap;gap:8px}
   .wizchips .wchip{border:1px solid var(--line);background:var(--panel2);border-radius:99px;padding:10px 15px;font-size:14px;cursor:pointer;color:var(--muted)}
   .wizchips .wchip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .wizchips .wchip.wedit{display:inline-flex;align-items:center;gap:9px;cursor:default}
+  .wizchips .wchip .wx{border:none;width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.28);color:#fff;cursor:pointer;font-size:14px;line-height:1;flex:0 0 auto}
+  .wizchips .wchip .wx:hover{background:var(--bad)}
   .wizres{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:12px 14px;margin-top:10px;font-size:14.5px}
   .wizres .q{font:12.5px/1.7 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;margin-top:8px;color:var(--txt);overflow-x:auto}
   .wizgo{width:100%;margin-top:12px;padding:14px;font-size:15.5px}
   .wizoprow .wx{border:none;width:30px;height:30px;border-radius:8px;background:var(--line);color:var(--txt);cursor:pointer;font-size:14px;line-height:1;margin-left:4px;flex:0 0 auto}
   .wizoprow .wx:hover{background:var(--bad);color:#fff}
-  #wizCustomAdd .cname,#wizCustomAdd .cdur,#wizCustomAdd select.blk{background:var(--panel2)}
+  #wizCustomAdd{background:var(--panel2);border:1px dashed var(--line);border-radius:12px;padding:12px;margin-top:14px}
+  #wizCustomAdd .cname,#wizCustomAdd .cdur,#wizCustomAdd select.blk{background:var(--panel);height:42px;border-radius:10px;font-size:15px}
+  #wizCustomAdd .cname{padding:8px 12px}
+  #wizCustomAdd select.blk{padding:8px 10px}
+  #wizCustomAdd .cdur{width:64px;flex:0 0 64px;text-align:center}
+  #wizCustomAdd .wizc-min{display:inline-flex;align-items:center;gap:6px}
+  #wizCustomAdd .btn{height:42px;border-radius:10px;font-size:14.5px}
   #wiz_date{font-size:15px;padding:9px 11px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
   .wizday{margin-left:10px;color:var(--muted);font-size:13.5px}
   /* идёт день: диспетчерский экран */
@@ -332,8 +341,9 @@
   .skl{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;cursor:pointer;white-space:nowrap}
   .skl input{width:17px;height:17px}
   .skl .dot{width:8px;height:8px;margin:0}
-  .surgrow .x{flex:0 0 auto;cursor:pointer;border:none;width:26px;height:26px;border-radius:7px;background:var(--line);color:var(--txt);font-size:15px;line-height:1}
+  .surgrow .x{flex:0 0 auto;cursor:pointer;border:none;width:30px;height:30px;border-radius:8px;background:var(--line);color:var(--txt);font-size:15px;line-height:1}
   .surgrow .x:hover{background:var(--bad);color:#fff}
+  .sklwrap{display:inline-flex;align-items:center;gap:9px;flex-wrap:wrap}
   /* неделя: день под своей датой */
   .weekrow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
   .wday{flex:1 1 0;min-width:76px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:12px;cursor:pointer;text-align:center;color:var(--muted);transition:.12s}
@@ -359,6 +369,13 @@
     .presetrow .presetnote{min-width:0;flex-basis:100%}
     .btn-print{display:none}   /* печать с телефона — через срезы; кнопка экономит место в шапке */
     .liveclock{font-size:40px}
+    /* хирурги: карточкой — фамилия с кнопками в первой строке, навыки во второй */
+    .surgrow{border-top:1px solid var(--line);padding-top:9px;margin:9px 0 0}
+    .surgrow:first-child{border-top:none;padding-top:0;margin-top:4px}
+    .surgrow input[type=text]{flex:1 1 120px}
+    .sklwrap{flex-basis:100%;gap:4px 12px;padding:2px 0 2px 2px}
+    .skl{font-size:13px;padding:3px 0}
+    .skl input{width:20px;height:20px}
   }
   /* PWA на iPhone: отступы под чёлку/индикатор в standalone-режиме */
   @supports(padding:max(0px)){
@@ -443,15 +460,25 @@
     <div class="wizsec">
       <div class="wizlbl">3 · Кто сегодня оперирует <span style="text-transform:none;letter-spacing:0">— нажмите, чтобы включить/выключить</span></div>
       <div class="wizchips" id="wizSurg"></div>
+      <div class="blkrow" style="margin-top:12px">
+        <input type="text" class="cname" id="wizs_name" placeholder="Фамилия нового хирурга" style="flex:1 1 150px;min-width:130px" onkeydown="if(event.key==='Enter')wizAddSurgeon()">
+        <button class="btn sm primary" onclick="wizAddSurgeon()">Добавить</button>
+        <button class="btn sm" id="wizSurgEditBtn" onclick="wizToggleSurgEdit()">Убрать…</button>
+      </div>
     </div>
     <div class="wizsec">
       <div class="wizlbl">4 · Какие операции</div>
       <div id="wizOps"></div>
-      <div class="blkrow" id="wizCustomAdd" style="margin-top:10px">
-        <input type="text" class="cname" id="wizc_name" placeholder="Своя операция — название" style="flex:1 1 140px;min-width:120px" onkeydown="if(event.key==='Enter')wizAddCustom()">
-        <select class="blk" id="wizc_set" title="какой сустав"><option value="shoulder">Плечо</option><option value="knee" selected>Колено</option><option value="ankle">Голеностоп</option></select>
-        <input type="number" class="cdur" id="wizc_dur" value="45" min="5" step="5" title="длительность, мин">
-        <button class="btn sm primary" onclick="wizAddCustom()">+</button>
+      <div id="wizCustomAdd">
+        <div class="wizlbl" style="margin-bottom:8px">Своя операция — не из списка</div>
+        <div class="blkrow">
+          <input type="text" class="cname" id="wizc_name" placeholder="Название операции" style="flex:1 1 100%;min-width:0" onkeydown="if(event.key==='Enter')wizAddCustom()">
+        </div>
+        <div class="blkrow" style="margin-top:8px">
+          <select class="blk" id="wizc_set" title="какой сустав" style="flex:1 1 auto"><option value="shoulder">Плечо</option><option value="knee" selected>Колено</option><option value="ankle">Голеностоп</option></select>
+          <span class="wizc-min"><input type="number" class="cdur" id="wizc_dur" value="45" min="5" step="5" title="длительность, мин"><span class="sep">мин</span></span>
+          <button class="btn sm primary" onclick="wizAddCustom()" style="flex:0 0 auto">Добавить</button>
+        </div>
       </div>
     </div>
     <div class="wizres" id="wizRes"></div>
@@ -762,8 +789,8 @@ function renderSurgeons(){
   host.innerHTML=surgeonList.map((g,i)=>`<div class="surgrow" data-sid="${g.id}">
     <label class="skl" title="сегодня оперирует / отсутствует"><input type="checkbox"${g.off?'':' checked'} onchange="surgeonPresent('${g.id}',this.checked)">сегодня</label>
     <input type="text" placeholder="Хирург ${i+1}" value="${esc(g.name)}" oninput="surgeonSet('${g.id}',this.value)"${g.off?' style="opacity:.5"':''}>
-    ${TYPES.map(t=>`<label class="skl" title="${OPS[t].label}"><input type="checkbox"${(g.ops||[]).indexOf(t)>=0?' checked':''} onchange="surgeonToggle('${g.id}','${t}',this.checked)"><span class="dot" style="background:${OPS[t].color}"></span>${OPS[t].short}</label>`).join('')}
     <button class="x" onclick="removeSurgeon('${g.id}')" title="убрать хирурга">×</button>
+    <span class="sklwrap">${TYPES.map(t=>`<label class="skl" title="${OPS[t].label}"><input type="checkbox"${(g.ops||[]).indexOf(t)>=0?' checked':''} onchange="surgeonToggle('${g.id}','${t}',this.checked)"><span class="dot" style="background:${OPS[t].color}"></span>${OPS[t].short}</label>`).join('')}</span>
   </div>`).join('') || '<div class="note">Хирургов нет — добавьте кнопкой ниже.</div>';
 }
 function surgeonPresent(id,on){ const g=surgeonList.find(x=>x.id===id); if(!g) return; g.off=!on; manualOps=null; surgRenderedIds=null; saveSettings(); render(); }
@@ -780,6 +807,21 @@ function wizStep(id,d){
   manualOps=null; saveSettings(); render();
 }
 function wizSurgToggle(id){ const g=surgeonList.find(x=>x.id===id); if(!g) return; g.off=!g.off; manualOps=null; surgRenderedIds=null; saveSettings(); render(); }
+let wizSurgEdit=false;   // режим «Убрать…» в мастере: чипы с крестиками
+function wizAddSurgeon(){
+  const inp=$('wizs_name'); const n=(inp.value||'').trim();
+  if(!n){ inp.focus(); return; }
+  surgeonList.push({id:newSurgeonId(), name:n, ops:TYPES.slice(), off:false});
+  inp.value=''; inp.focus();
+  surgRenderedIds=null; manualOps=null; saveSettings(); render();
+}
+function wizToggleSurgEdit(){ wizSurgEdit=!wizSurgEdit; render(); }
+function wizRemoveSurgeon(id){
+  const g=surgeonList.find(x=>x.id===id); if(!g) return;
+  if(!confirm('Убрать хирурга «'+(g.name||'без имени')+'» из состава отделения?')) return;
+  if(surgeonList.length<=1) wizSurgEdit=false;
+  removeSurgeon(id);
+}
 function wizCustomStep(id,d){ const c=customList.find(x=>x.id===id); if(!c) return; c.count=Math.max(0,Math.round((c.count||0)+d)); customRenderedIds=null; manualOps=null; saveSettings(); render(); }
 function wizAddCustom(){
   const n=$('wizc_name').value.trim(); if(!n){ $('wizc_name').focus(); return; }
@@ -798,8 +840,11 @@ function renderWizard(s, r){
   const N=stationCount(s);
   $('wizTablesN').textContent=Math.round(s.tables);
   $('wizTablesNote').textContent = s.tables>s.inv.towers ? `реально работает ${N} — больше не позволяют стойки (${Math.round(s.inv.towers)} шт.)` : '';
-  $('wizSurg').innerHTML = surgeonList.map((g,i)=>`<button class="wchip${g.off?'':' on'}" onclick="wizSurgToggle('${g.id}')">${escHtml(surgeonName(g,i))}</button>`).join('')
-    || '<span class="note" style="margin:0">хирургов нет — добавьте в «Ресурсы и хирурги»</span>';
+  $('wizSurg').innerHTML = surgeonList.map((g,i)=> wizSurgEdit
+      ? `<span class="wchip on wedit">${escHtml(surgeonName(g,i))}<button class="wx" onclick="wizRemoveSurgeon('${g.id}')" title="убрать из состава">×</button></span>`
+      : `<button class="wchip${g.off?'':' on'}" onclick="wizSurgToggle('${g.id}')">${escHtml(surgeonName(g,i))}</button>`).join('')
+    || '<span class="note" style="margin:0">хирургов нет — впишите фамилию ниже и нажмите «Добавить»</span>';
+  const web=$('wizSurgEditBtn'); if(web) web.textContent=wizSurgEdit?'Готово':'Убрать…';
   // поимённый режим: расчёт идёт по списку пациентов — счётчики скрываем, чтобы цифры не расходились
   $('wizOps').innerHTML = useCases
     ? `<div class="note" style="margin:0 0 8px">Включён <b>поимённый список пациентов</b> (${caseList.length}) — расчёт ниже идёт по нему. Список редактируется в полном экране, в блоке «Что оперирую сегодня».</div>`
@@ -807,7 +852,7 @@ function renderWizard(s, r){
       + `<button class="btn sm" onclick="toggleCases(false);const c=$('use_cases');if(c)c.checked=false;">Планировать числами (список сохранится)</button>`
     : TYPES.map(t=>`<div class="wizoprow"><span class="dot" style="background:${OPS[t].color}"></span><span class="nm">${OPS[t].label}</span><div class="wizstep"><button onclick="wizStep('m_${t}',-1)">−</button><b>${Math.round(num('m_'+t))}</b><button onclick="wizStep('m_${t}',1)">+</button></div></div>`).join('')
       + customList.map(c=>`<div class="wizoprow"><span class="dot" style="background:var(--${c.setCat||'acl'})"></span><span class="nm">${escHtml(c.label||'Операция')} <span class="muted" style="font-size:12px;white-space:nowrap">${Math.round(c.dur||45)} мин · ${JOINTS[jointOf(c)].label.toLowerCase()}</span></span><div class="wizstep"><button onclick="wizCustomStep('${c.id}',-1)">−</button><b>${Math.max(0,Math.round(c.count||0))}</b><button onclick="wizCustomStep('${c.id}',1)">+</button></div><button class="wx" onclick="removeCustomOp('${c.id}')" title="убрать операцию из списка">×</button></div>`).join('');
-  const wca=$('wizCustomAdd'); if(wca) wca.style.display=useCases?'none':'flex';
+  const wca=$('wizCustomAdd'); if(wca) wca.style.display=useCases?'none':'';
   // живой результат: сколько влезает, во сколько закончим, очередь по столам
   const total=r.sched.length, rej=Object.values(r.rejected).reduce((a,b)=>a+b,0);
   const mk=r.sched.reduce((m,o)=>Math.max(m,o.end),0);
