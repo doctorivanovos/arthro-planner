@@ -744,6 +744,23 @@
   </details>
 
   <!-- АНАЛИЗ ДНЯ -->
+  <details class="acc" data-tab="reports" id="statsAcc" ontoggle="if(this.open)renderStats()">
+    <summary>Итоги — операции · импланты · длительности<span class="acc-hint">факт за период, средние против нормативов</span><span class="chev">▾</span></summary>
+    <div class="acc-body">
+      <div class="blkrow" style="margin-top:8px">
+        <span class="sep">Период</span>
+        <select class="blk" id="stats_period" onchange="renderStats()">
+          <option value="7">неделя</option>
+          <option value="30" selected>30 дней</option>
+          <option value="90">всё (90 дней)</option>
+        </select>
+        <button class="btn sm" onclick="copyStats()">Скопировать</button>
+        <button class="btn sm" onclick="shareStats()">Отправить…</button>
+      </div>
+      <div id="statsBody"></div>
+    </div>
+  </details>
+
   <details class="acc" data-tab="reports">
     <summary>Анализ дня — сценарии и пределы<span class="acc-hint">где больше всего операций</span><span class="chev">▾</span></summary>
     <div class="acc-body">
@@ -934,6 +951,7 @@ function sanitizeCards(arr){
     name:typeof x.name==='string'?x.name:'',
     status:x.status==='done'?'done':'plan',
     doneEnd:isFinite(+x.doneEnd)?+x.doneEnd:null,
+    doneStart:isFinite(+x.doneStart)?+x.doneStart:null,
     tower:isFinite(+x.tower)?Math.max(0,Math.round(+x.tower)):0,
     implants:Array.isArray(x.implants)?x.implants:[],
     photos:Array.isArray(x.photos)?x.photos.filter(ph=>typeof ph==='string'&&ph.indexOf('data:image')===0):[],
@@ -1023,6 +1041,7 @@ function toggleCardDone(id, withImpl){
     const now=new Date(); const wall=(now.getHours()*60+now.getMinutes())-8*60;
     c.status='done';
     c.doneEnd=Math.max(0, Math.round(sch ? (wall>=sch.end ? sch.end : Math.max(sch.start+1, wall)) : Math.max(0,wall)));
+    c.doneStart=sch?Math.round(sch.start):null;   // старт по плану — для факт-хронометража
     if(sch) c.tower=sch.tower;
   }
   manualOps=null; saveSettings(); render();
@@ -1061,6 +1080,88 @@ function renderCards(s, sched){
   }
   const ch=$('cardsHint'); if(ch){ const d=doneCards().length; ch.textContent=`${nPlan} в плане${d?` · ${d} выполнено`:''}`; }
 }
+/* ---------- итоги: факт-хронометраж и месячная сводка (по выполненным карточкам) ---------- */
+let statsText='';
+function collectStats(daysBack){
+  const store=Object.assign({}, dayStore); if(curDay) store[curDay]={cards};
+  const lim=new Date(); lim.setDate(lim.getDate()-daysBack);
+  const limStr=lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
+  const ops={}, impl={}, durs={}; let total=0, days=0, photos=0;
+  for(const ds in store){
+    if(ds<limStr) continue;
+    const cs=(store[ds]&&store[ds].cards)||[]; let anyDone=false;
+    cs.forEach(c=>{
+      if(c.status!=='done') return;
+      anyDone=true; total++;
+      const key=OPS[c.type]?OPS[c.type].label:((c.label&&c.label.trim())||'Другое');
+      ops[key]=(ops[key]||0)+1;
+      (c.implants||[]).forEach(x=>{ const k=`${x.n}${x.size?' '+x.size:''}${x.m?' ('+x.m+')':''}`; impl[k]=(impl[k]||0)+(+x.q||0); });
+      photos+=(c.photos||[]).length;
+      // факт-длительность: конец по отметке минус плановое начало (санитарные границы 10..360 мин)
+      if(OPS[c.type] && c.doneStart!=null && c.doneEnd!=null){
+        const d=c.doneEnd-c.doneStart;
+        if(d>=10 && d<=360){ (durs[c.type]=durs[c.type]||[]).push(d); }
+      }
+    });
+    if(anyDone) days++;
+  }
+  return {ops,impl,durs,total,days,photos};
+}
+function renderStats(){
+  const host=$('statsBody'); if(!host) return;
+  const period=+($('stats_period')&&$('stats_period').value||30);
+  const st=collectStats(period);
+  const opRows=Object.entries(st.ops).sort((a,b)=>b[1]-a[1]);
+  const implRows=Object.entries(st.impl).sort((a,b)=>b[1]-a[1]);
+  let html='', txt=`Итоги за ${period} дн.\n\nОпераций выполнено: ${st.total} (операционных дней: ${st.days})\n`;
+  html+=`<h3>Операции</h3><div class="note" style="margin:0 0 6px">выполнено <b>${st.total}</b> за ${st.days} операционных дн.</div>`;
+  if(opRows.length){ html+='<table><tbody>'+opRows.map(([k,v])=>`<tr><td>${escHtml(k)}</td><td class="r"><b>${v}</b></td></tr>`).join('')+'</tbody></table>';
+    opRows.forEach(([k,v])=>{ txt+=`  ${k}: ${v}\n`; }); }
+  else html+='<div class="note">пока нет выполненных операций — отмечайте галочкой ✓, и статистика начнёт копиться</div>';
+  html+='<h3>Импланты — списано</h3>';
+  txt+='\nИмпланты:\n';
+  if(implRows.length){ html+='<table><tbody>'+implRows.map(([k,v])=>`<tr><td>${escHtml(k)}</td><td class="r"><b>× ${v}</b></td></tr>`).join('')+'</tbody></table>';
+    implRows.forEach(([k,v])=>{ txt+=`  ${k} × ${v}\n`; }); }
+  else { html+='<div class="note">списаний за период нет</div>'; txt+='  —\n'; }
+  // факт против норматива
+  html+='<h3>Длительности: факт против норматива</h3>';
+  txt+='\nДлительности (факт/норматив, мин):\n';
+  let anyDur=false, canApply=false;
+  html+='<table><thead><tr><th>Операция</th><th class="r">случаев</th><th class="r">факт, мин</th><th class="r">норматив</th><th class="r">разница</th></tr></thead><tbody>';
+  TYPES.forEach(t=>{
+    const arr=st.durs[t]||[]; if(!arr.length) return;
+    anyDur=true;
+    const avg=Math.round(arr.reduce((a,b)=>a+b,0)/arr.length);
+    const norm=Math.round(num('d_'+t));
+    const diff=avg-norm; if(arr.length>=3 && Math.abs(diff)>=5) canApply=true;
+    const col=Math.abs(diff)<5?'var(--muted)':(diff>0?'var(--bad)':'var(--ok)');
+    html+=`<tr><td><span class="dot" style="background:${OPS[t].color}"></span>${OPS[t].label}</td><td class="r">${arr.length}</td><td class="r"><b>${avg}</b></td><td class="r">${norm}</td><td class="r" style="color:${col}">${diff>0?'+':''}${diff}</td></tr>`;
+    txt+=`  ${OPS[t].label}: факт ${avg} / норматив ${norm} (${diff>0?'+':''}${diff}), случаев ${arr.length}\n`;
+  });
+  html+='</tbody></table>';
+  if(!anyDur) html+='<div class="note">факт копится из отметок «выполнена» по часам — через несколько дней здесь появятся реальные средние</div>';
+  if(canApply) html+=`<div class="btnrow"><button class="btn sm primary" onclick="applyFactDurations()">Подставить фактические средние в настройки</button></div>
+    <div class="note">заменит нормативы длительности типов, где накопилось ≥3 случаев и разница ≥5 мин — план станет честнее</div>`;
+  host.innerHTML=html;
+  statsText='Клиника им. Н. И. Пирогова СПбГУ — артроскопия\n'+txt;
+}
+function applyFactDurations(){
+  const st=collectStats(+($('stats_period')&&$('stats_period').value||30));
+  const changes=[];
+  TYPES.forEach(t=>{
+    const arr=st.durs[t]||[]; if(arr.length<3) return;
+    const avg=Math.round((arr.reduce((a,b)=>a+b,0)/arr.length)/5)*5;
+    const norm=Math.round(num('d_'+t));
+    if(Math.abs(avg-norm)>=5) changes.push({t,from:norm,to:avg});
+  });
+  if(!changes.length) return;
+  if(!confirm('Обновить нормативы по факту?\n'+changes.map(c=>`${OPS[c.t].label}: ${c.from} → ${c.to} мин`).join('\n'))) return;
+  changes.forEach(c=>{ $('d_'+c.t).value=c.to; });
+  saveSettings(); render(); renderStats();
+}
+function copyStats(){ renderStats(); if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(statsText); }
+function shareStats(){ renderStats(); if(navigator.share) navigator.share({text:statsText}).catch(()=>{}); else copyStats(); }
+
 /* ---------- разделы (как в банковском приложении): День · Срезы · Настройки ---------- */
 let curTab='day';
 function showTab(t){
