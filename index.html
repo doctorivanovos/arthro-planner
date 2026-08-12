@@ -203,6 +203,12 @@
   .mvbtns button{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:13px;cursor:pointer;line-height:1}
   .mvbtns button:active{background:var(--accent);color:#fff}
   .crow .dnord{width:54px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 4px;font-size:14px;text-align:center;font-weight:600;cursor:pointer}
+  /* undo-снекбар */
+  #undoBar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:95;display:flex;align-items:center;gap:12px;
+    background:#2a2520;color:#fff;border-radius:12px;padding:11px 14px 11px 16px;font-size:13.5px;box-shadow:0 6px 24px rgba(0,0,0,.3);max-width:92vw}
+  #undoBar .ub-do{border:none;background:var(--gold);color:#2a2520;border-radius:8px;padding:8px 13px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+  #undoBar .ub-x{border:none;background:rgba(255,255,255,.15);color:#fff;width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:14px;line-height:1}
+  @media(max-width:700px){ #undoBar{bottom:calc(72px + env(safe-area-inset-bottom))} }
   /* списание имплантов */
   .implbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px}
   .implbox .implhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:6px}
@@ -462,6 +468,13 @@
     <div class="livesec"><h3>Вызвать в предоперационную</h3><div id="liveCalls"></div></div>
     <div class="livesec"><h3>Наборы · стерилизация</h3><div id="liveSets"></div></div>
   </div>
+</div>
+
+<!-- UNDO: вернуть после разрушительного действия -->
+<div id="undoBar" class="noprint" style="display:none">
+  <span id="undoLbl"></span>
+  <button class="ub-do" onclick="undoRestore()">↩ Вернуть</button>
+  <button class="ub-x" onclick="hideUndoBar(true)">×</button>
 </div>
 
 <!-- ПРОСМОТР ФОТО ЭТИКЕТКИ -->
@@ -1031,6 +1044,7 @@ function bestCardOrder(){
 }
 function clearPlanCards(){
   if(planCards().length && !confirm('Убрать все незавершённые операции из плана?')) return;
+  if(planCards().length) takeUndo('План обнулён');
   cards=doneCards(); manualOps=null; saveSettings(); render();
 }
 function toggleCardDone(id, withImpl){
@@ -1080,6 +1094,35 @@ function renderCards(s, sched){
   }
   const ch=$('cardsHint'); if(ch){ const d=doneCards().length; ch.textContent=`${nPlan} в плане${d?` · ${d} выполнено`:''}`; }
 }
+/* ---------- undo: одна ступень отката для разрушительных действий ---------- */
+let undoSnap=null, undoTimer=null;
+function takeUndo(label){
+  undoSnap={label, ts:Date.now(), day:curDay, cards:JSON.parse(JSON.stringify(cards)), blocks:JSON.parse(JSON.stringify(manualBlocks)), useDoneLog};
+  try{ localStorage.setItem('arthroUndo1', JSON.stringify(undoSnap)); }catch(e){}
+  showUndoBar();
+}
+function showUndoBar(){
+  const b=$('undoBar'); if(!b||!undoSnap) return;
+  $('undoLbl').textContent=undoSnap.label;
+  b.style.display='flex';
+  if(undoTimer) clearTimeout(undoTimer);
+  undoTimer=setTimeout(()=>hideUndoBar(true), 8*60*1000);   // 8 минут — потом бар прячется (данные снапшота остаются час)
+}
+function hideUndoBar(forget){
+  const b=$('undoBar'); if(b) b.style.display='none';
+  if(forget){ undoSnap=null; try{ localStorage.removeItem('arthroUndo1'); }catch(e){} }
+}
+function undoRestore(){
+  if(!undoSnap){ try{ undoSnap=JSON.parse(localStorage.getItem('arthroUndo1')); }catch(e){} }
+  if(!undoSnap) return;
+  if(undoSnap.day && undoSnap.day!==curDay) gotoDay(undoSnap.day);
+  cards=sanitizeCards(undoSnap.cards); cardsRenderedSig=null;
+  manualBlocks=Array.isArray(undoSnap.blocks)?undoSnap.blocks:[];
+  useDoneLog=!!undoSnap.useDoneLog; const c=$('use_done'); if(c)c.checked=useDoneLog;
+  hideUndoBar(true);
+  saveSettings(); render();
+}
+
 /* ---------- итоги: факт-хронометраж и месячная сводка (по выполненным карточкам) ---------- */
 let statsText='';
 function collectStats(daysBack){
@@ -1474,6 +1517,7 @@ function resetAll(){
 }
 function newDay(){
   if((cards.length||manualOps) && !confirm('Начать новый день? Операции дня, разовые блокировки и таймеры стерилизации очистятся. Настройки отделения и шаблоны останутся.')) return;
+  if(cards.length) takeUndo('Начат новый день — прежние операции убраны');
   cards=[]; cardsRenderedSig=null;
   useDoneLog=false; const c2=$('use_done'); if(c2)c2.checked=false;
   manualBlocks=[]; manualOps=null; curSlice=''; curSliceRole=null;
@@ -1491,6 +1535,7 @@ function snapshotConfig(){ const f={}; PERSIST_IDS.forEach(id=>{const el=$(id); 
 function applyConfig(snap){
   if(!snap) return;
   if(cards.length && !confirm('Загрузка шаблона очистит операции дня (настройки/ресурсы возьмутся из шаблона). Продолжить?')) return;
+  if(cards.length) takeUndo('Загружен шаблон — прежние операции убраны');
   if(snap.fields) PERSID_OK(snap);
   if(Array.isArray(snap.tableWin)){ tableWin=snap.tableWin.map(w=>({from:+w.from||0,to:+w.to||0})); tableWinRenderedN=-1; }
   if(Array.isArray(snap.surgeons) && snap.surgeons.length){ surgeonList=sanitizeSurgeons(snap.surgeons); surgRenderedIds=null; }
@@ -2214,6 +2259,7 @@ function drawCeilings(s){
 // заменить план карточками по счётчикам типов (гипотетические загрузчики сценариев)
 function applyMix(mix){
   if(planCards().some(c=>c.name&&c.name.trim()) && !confirm('Заменить текущий план? Вписанные фамилии будут убраны.')) return;
+  if(planCards().length) takeUndo('План заменён сценарием');
   const done=doneCards(); const out=[];
   TYPES.forEach(t=>{ for(let i=0;i<Math.max(0,Math.round(mix[t]||0));i++) out.push({id:newCardId(), type:t, label:'', joint:'knee', dur:null, name:'', status:'plan', doneEnd:null, tower:0, implants:[]}); });
   cards=done.concat(sanitizeCards(out)); cardsRenderedSig=null;
@@ -2383,6 +2429,7 @@ loadSettings();
 renderPresets();
 render();
 setupGanttDrag();
+(function(){ try{ const u=JSON.parse(localStorage.getItem('arthroUndo1')); if(u && Date.now()-u.ts<60*60*1000){ undoSnap=u; showUndoBar(); } else localStorage.removeItem('arthroUndo1'); }catch(e){} })();
 (function(){ let t='day'; try{ t=localStorage.getItem('arthroTab1')||'day'; }catch(e){} showTab(['day','reports','settings'].indexOf(t)>=0?t:'day'); })();
 // PWA: офлайн-кэш и установка на домашний экран
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
