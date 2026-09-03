@@ -203,6 +203,10 @@
   .mvbtns button{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:13px;cursor:pointer;line-height:1}
   .mvbtns button:active{background:var(--accent);color:#fff}
   .crow .dnord{width:54px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 4px;font-size:14px;text-align:center;font-weight:600;cursor:pointer}
+  .examta{width:100%;min-height:220px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--txt);resize:vertical}
+  .examta:focus{outline:none;border-color:var(--accent)}
+  .crow .exbtn{flex:0 0 auto;border:1px solid var(--line);background:var(--panel2);border-radius:9px;width:32px;height:32px;font-size:14px;cursor:pointer}
+  .crow .exbtn.has{border-color:var(--gold);background:#fff}
   /* undo-снекбар */
   #undoBar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:95;display:flex;align-items:center;gap:12px;
     background:#2a2520;color:#fff;border-radius:12px;padding:11px 14px 11px 16px;font-size:13.5px;box-shadow:0 6px 24px rgba(0,0,0,.3);max-width:92vw}
@@ -449,7 +453,8 @@
   </div>
   <div class="headact noprint">
     <label class="datelbl">День <input type="date" id="p_date" onchange="switchDay(this.value)"></label>
-    <button class="btn primary" onclick="openWizard()">Быстрый план</button>
+    <button class="btn primary" onclick="openExam()" title="утренний осмотр: текст как в мессенджере → карточка операции сама">📝 Осмотр</button>
+    <button class="btn" onclick="openWizard()">Быстрый план</button>
     <button class="btn" onclick="openLive()" title="крупный экран на время работы: столы, вызовы, наборы, стерилизация">Идёт день</button>
     <button class="btn" onclick="newDay()">Новый день</button>
     <button class="btn btn-print" onclick="window.print()">Печать дня</button>
@@ -489,6 +494,22 @@
 </div>
 
 <!-- ТАП ПО ОПЕРАЦИИ НА ЛЕНТЕ: выполнена + импланты -->
+<!-- ОСМОТР: утренняя запись как в мессенджере -->
+<div id="examSheet" class="wiz noprint" style="display:none;z-index:105">
+  <div class="wizcard" style="max-width:560px">
+    <div class="wizhead"><b id="examTitle">Осмотр</b><button class="x implhead-x" onclick="closeExam()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
+    <div class="note" style="margin:0 0 8px">Первая строка — «Фамилия что-где» (например «Байрамов левое плечо»), дальше свободный текст: анамнез, аллергии, АД, ЭЛН… Диктовка — микрофоном на клавиатуре.</div>
+    <textarea id="examText" class="examta" placeholder="Байрамов левое плечо&#10;Первый вывих в 2016 году&#10;Аллергии нет&#10;181/90&#10;ЭЛН нужен" oninput="examParseHint()"></textarea>
+    <div class="wizlbl" style="margin-top:10px">Операция <span id="examHint" style="text-transform:none;letter-spacing:0"></span></div>
+    <div class="wizchips" id="examTypeChips"></div>
+    <div class="btnrow" style="margin-top:12px">
+      <button class="btn primary" onclick="saveExam(false)">Сохранить</button>
+      <button class="btn" onclick="saveExam(true)">Сохранить + следующий</button>
+      <button class="btn" onclick="shareExam()">Отправить…</button>
+    </div>
+  </div>
+</div>
+
 <div id="opMenu" class="wiz noprint" style="display:none" onclick="if(event.target===this)closeOpMenu()">
   <div class="wizcard" style="max-width:400px">
     <div class="wizhead"><b id="opMenuTitle"></b><button class="x implhead-x" onclick="closeOpMenu()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
@@ -509,6 +530,7 @@
 <div id="wizard" class="wiz noprint" style="display:none">
   <div class="wizcard">
     <div class="wizhead"><b>Быстрый план дня</b><button class="btn sm" onclick="closeWizard()">Пропустить →</button></div>
+    <div class="btnrow" style="margin:2px 0 4px"><button class="btn sm primary" onclick="closeWizard();openExam()">📝 Начать с осмотров пациентов</button></div>
     <div class="wizsec">
       <div class="wizlbl">1 · Какой день</div>
       <input type="date" id="wiz_date" onchange="wizDate(this.value)"><span class="wizday" id="wizDayName"></span>
@@ -632,6 +654,7 @@
         <button class="btn sm primary" onclick="showSlice('cso')">ЦСО — стерилизация</button>
         <button class="btn sm primary" onclick="showSlice('anest')">Анестезиолог</button>
         <button class="btn sm primary" onclick="showSlice('tables')">По столам</button>
+        <button class="btn sm primary" onclick="showSlice('exams')">Осмотры дня</button>
         <button class="btn sm primary" onclick="showSlice('impl')">Списание имплантов</button>
       </div>
       <pre class="slice" id="sliceOut"></pre>
@@ -941,7 +964,7 @@ function sliceTables(){ const p=planForSlice(), N=stationCount(p.s); let out='О
 function planDateStr(){ const v=$('p_date')&&$('p_date').value; if(!v) return ''; const d=new Date(v+'T00:00'); if(isNaN(d.getTime())) return v; const s=d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); }
 function sliceHeader(){ const ds=planDateStr(); return 'Клиника им. Н. И. Пирогова СПбГУ — артроскопия\n'+(ds?ds+'\n':'')+'\n'; }
 function sliceNurse(){ const p=planForSlice(); const rows=p.sched.slice().sort((a,b)=>a.start-b.start).map(o=>`${fmtTime(o.start)}  стол ${o.tower+1}  ${nameForOp(o,p)} — ${opLabel(o)}  →  открыть набор ${setName(o.setCat,o.setIdx)} (${SET_SHORT[o.setCat]||o.setCat})${opShaver(o)?' + шейвер':''}`); return `Операционная медсестра — какой набор открывать на какую операцию\n\n`+(rows.join('\n')||'нет операций'); }
-function showSlice(role){ curSliceRole=role; const body = role==='cso'?sliceCSO():role==='anest'?sliceAnest():role==='nurse'?sliceNurse():role==='impl'?sliceImpl():sliceTables(); curSlice = sliceHeader()+body; $('sliceOut').textContent=curSlice; $('sliceActions').style.display='flex'; $('sliceNote').textContent=''; }
+function showSlice(role){ curSliceRole=role; const body = role==='cso'?sliceCSO():role==='anest'?sliceAnest():role==='nurse'?sliceNurse():role==='impl'?sliceImpl():role==='exams'?sliceExams():sliceTables(); curSlice = sliceHeader()+body; $('sliceOut').textContent=curSlice; $('sliceActions').style.display='flex'; $('sliceNote').textContent=''; }
 function shareSlice(){
   if(!curSlice) return;
   if(navigator.share){ navigator.share({text:curSlice}).catch(()=>{}); }
@@ -967,6 +990,7 @@ function sanitizeCards(arr){
     doneStart:isFinite(+x.doneStart)?+x.doneStart:null,
     tower:isFinite(+x.tower)?Math.max(0,Math.round(+x.tower)):0,
     implants:Array.isArray(x.implants)?x.implants:[],
+    exam:typeof x.exam==='string'?x.exam:'',
     photos:Array.isArray(x.photos)?x.photos.filter(ph=>typeof ph==='string'&&ph.indexOf('data:image')===0):[],
   }));
 }
@@ -1078,6 +1102,7 @@ function renderCards(s, sched){
       const impl=done?`<button class="implbtn${ni?' has':''}" onclick="openImplants('${c.id}')" title="списать импланты">${ni?'имп. '+ni:'+ имп.'}</button>`:'';
       return `<div class="caserow crow${done?' cdone':''}" data-id="${c.id}">${ord}<span class="dot" style="background:${cardColor(c)}"></span>${typeSel}${custom}`
         +`<input type="text" class="cname cpat" placeholder="фамилия" value="${escHtml(c.name)}" oninput="cardSet('${c.id}','name',this.value)">`
+        +`<button class="exbtn${(c.exam&&c.exam.trim())?' has':''}" onclick="openExam('${c.id}')" title="${(c.exam&&c.exam.trim())?'осмотр записан — открыть':'записать осмотр'}">📝</button>`
         +`<span class="cfit" id="cfit-${c.id}"></span>${impl}`
         +`<button class="ckb${done?' on':''}" onclick="toggleCardDone('${c.id}')" title="${done?'выполнена — нажмите, чтобы вернуть в план':'отметить выполненной'}">✓</button>`
         +`<button class="x" onclick="removeCard('${c.id}')" title="убрать">×</button></div>`;
@@ -1204,6 +1229,75 @@ function applyFactDurations(){
 }
 function copyStats(){ renderStats(); if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(statsText); }
 function shareStats(){ renderStats(); if(navigator.share) navigator.share({text:statsText}).catch(()=>{}); else copyStats(); }
+
+/* ---------- осмотры: утренняя запись → карточка операции ---------- */
+let examCardId=null;   // null = новый осмотр (карточка создастся при сохранении)
+let examType='';       // выбранный тип операции для нового осмотра
+function examParse(text){
+  const first=(text.split('\n')[0]||'').trim();
+  const words=first.split(/\s+/).filter(Boolean);
+  const name=words[0]||'';
+  const low=first.toLowerCase();
+  const joint=low.includes('плеч')?'shoulder':(low.includes('колен')?'knee':(low.includes('голеностоп')?'ankle':''));
+  return {name, joint};
+}
+function examSuggestTypes(joint){
+  // подсказка по суставу: плечо → плечевые операции, колено → коленные
+  const shoulder=['bankart','cuff','latarjet'], knee=['acl','meniscus'];
+  if(joint==='shoulder') return shoulder.concat(knee);
+  if(joint==='knee'||joint==='ankle') return knee.concat(shoulder);
+  return TYPES.slice();
+}
+function renderExamChips(){
+  const info=examParse($('examText').value);
+  const list=examSuggestTypes(info.joint);
+  $('examTypeChips').innerHTML=list.map(t=>`<button class="wchip${examType===t?' on':''}" onclick="examType='${t}';renderExamChips()">${OPS[t].label}</button>`).join('')
+    +`<button class="wchip${examType==='later'?' on':''}" onclick="examType='later';renderExamChips()">выберу позже</button>`;
+}
+function examParseHint(){
+  const info=examParse($('examText').value);
+  $('examHint').textContent=info.name?`— ${info.name}${info.joint?(info.joint==='shoulder'?' · плечо':' · колено/голеностоп'):''}`:'';
+  renderExamChips();
+}
+function openExam(cardId){
+  examCardId=cardId||null;
+  const c=cardId?cards.find(x=>x.id===cardId):null;
+  $('examTitle').textContent=c?('Осмотр — '+(c.name||cardLabel(c))):'Осмотр';
+  $('examText').value=(c&&c.exam)||'';
+  examType=c?c.type:'';
+  examParseHint();
+  $('examSheet').style.display='flex';
+  setTimeout(()=>$('examText').focus(),50);
+}
+function closeExam(){ $('examSheet').style.display='none'; examCardId=null; }
+function saveExam(andNext){
+  const txt=$('examText').value.trim();
+  if(!txt){ $('examText').focus(); return; }
+  const info=examParse(txt);
+  if(examCardId){
+    const c=cards.find(x=>x.id===examCardId); if(!c) return;
+    c.exam=txt; if(!c.name&&info.name) c.name=info.name;
+    if(examType && examType!=='later' && OPS[examType]) c.type=examType;
+  } else {
+    const t=(examType && examType!=='later' && OPS[examType])?examType:(examSuggestTypes(info.joint)[0]||TYPES[0]);
+    cards.push({id:newCardId(), type:t, label:'', joint:'knee', dur:null, name:info.name||'', status:'plan', doneEnd:null, tower:0, implants:[], exam:txt});
+  }
+  cardsRenderedSig=null; saveSettings(); render();
+  if(andNext){ examCardId=null; examType=''; $('examTitle').textContent='Осмотр'; $('examText').value=''; examParseHint(); $('examText').focus(); }
+  else closeExam();
+}
+function shareExam(){
+  const txt=$('examText').value.trim(); if(!txt) return;
+  if(navigator.share) navigator.share({text:txt}).catch(()=>{});
+  else if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+}
+function sliceExams(){
+  const withExam=[];
+  // в порядке очереди, затем выполненные
+  planCards().concat(doneCards()).forEach(c=>{ if(c.exam&&c.exam.trim()) withExam.push(c); });
+  if(!withExam.length) return 'Осмотры дня\n\nосмотров пока нет — кнопка «📝 Осмотр» в шапке';
+  return 'Осмотры дня\n\n'+withExam.map(c=>c.exam.trim()).join('\n\n---\n\n');
+}
 
 /* ---------- разделы (как в банковском приложении): День · Срезы · Настройки ---------- */
 let curTab='day';
@@ -2414,7 +2508,7 @@ function renderSter(){
 // изменение настроек/плана сбрасывает ручную раскладку (иначе она устаревает: геометрия, фантомные столы);
 // поля-формы, которые сами по себе план не меняют (дата, заготовки журнала/блокировок), раскладку не трогают
 const MANUAL_KEEP_IDS=['p_date','done_type','done_end','done_tower','blk_station','blk_from','blk_to','preset_sel','impl_pat','impl_name','impl_qty'];
-document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor') || e.target.closest('#cardList')))){ manualOps=null; } render(); });
+document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor') || e.target.closest('#cardList') || e.target.id==='examText'))){ manualOps=null; } render(); });
 // колесо мыши над числовым полем не должно менять значение, но и не выбивать фокус при прокрутке страницы
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(()=>{ renderSter(); renderLive(); },1000);
