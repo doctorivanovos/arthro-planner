@@ -213,6 +213,7 @@
   .exgrid .cname:focus{outline:none;border-color:var(--accent)}
   .crow .exbtn{flex:0 0 auto;border:1px solid var(--line);background:var(--panel2);border-radius:9px;width:32px;height:32px;font-size:14px;cursor:pointer}
   .crow .exbtn.has{border-color:var(--gold);background:#fff}
+  .pillbtn{border:none;cursor:pointer;font-family:inherit}
   /* undo-снекбар */
   #undoBar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:95;display:flex;align-items:center;gap:12px;
     background:#2a2520;color:#fff;border-radius:12px;padding:11px 14px 11px 16px;font-size:13.5px;box-shadow:0 6px 24px rgba(0,0,0,.3);max-width:92vw}
@@ -500,6 +501,27 @@
 </div>
 
 <!-- ТАП ПО ОПЕРАЦИИ НА ЛЕНТЕ: выполнена + импланты -->
+<!-- ВНЕСТИ/ПОПРАВИТЬ ВЫПОЛНЕННУЮ ОПЕРАЦИЮ (тап по ленте) -->
+<div id="pastSheet" class="wiz noprint" style="display:none;z-index:106" onclick="if(event.target===this)closePast()">
+  <div class="wizcard" style="max-width:430px">
+    <div class="wizhead"><b id="pastTitle">Внести выполненную</b><button class="x implhead-x" onclick="closePast()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
+    <div class="wizlbl">Операция</div>
+    <div class="wizchips" id="pastChips"></div>
+    <div class="blkrow" style="margin-top:12px">
+      <input type="text" class="cname" id="past_name" placeholder="Фамилия пациента" style="flex:1 1 140px">
+    </div>
+    <div class="blkrow" style="margin-top:8px">
+      <span class="sep">закончил в</span><input type="time" id="past_end" step="300">
+      <select class="blk" id="past_tower"></select>
+    </div>
+    <div class="btnrow" style="margin-top:14px">
+      <button class="btn primary" id="pastSaveBtn" onclick="savePast()">Внести</button>
+      <button class="btn" id="pastReplanBtn" onclick="pastToPlan()" style="display:none">↩ Вернуть в план</button>
+    </div>
+    <div class="note" style="margin-top:10px">Так вносятся операции задним числом: «в 9:00 сделал ПКС, забыл внести». Выполненные блоки на ленте — нажмите, чтобы поправить время или стол.</div>
+  </div>
+</div>
+
 <!-- ОСМОТР: утренняя запись как в мессенджере -->
 <div id="examSheet" class="wiz noprint" style="display:none;z-index:105">
   <div class="wizcard" style="max-width:560px">
@@ -1126,7 +1148,7 @@ function renderCards(s, sched){
     }).join('')||'<div class="note">Операций пока нет — добавьте кнопками «+» выше или через «Быстрый план».</div>';
   }
   cards.forEach(c=>{ const el=$('cfit-'+c.id); if(!el) return;
-    if(c.status==='done'){ el.innerHTML=`<span class="pill ok">до ${minToClock(c.doneEnd||0)} · стол ${(c.tower||0)+1}</span>`; return; }
+    if(c.status==='done'){ el.innerHTML=`<button class="pill ok pillbtn" onclick="openPast('${c.id}')" title="поправить время/стол">до ${minToClock(c.doneEnd||0)} · стол ${(c.tower||0)+1} ✎</button>`; return; }
     const o=byCard.get(c);
     el.innerHTML=o?`<span class="pill ok">${fmtTime(o.start)} · стол ${o.tower+1}</span>`:'<span class="pill bad">не влезает</span>';
   });
@@ -1246,6 +1268,66 @@ function applyFactDurations(){
 }
 function copyStats(){ renderStats(); if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(statsText); }
 function shareStats(){ renderStats(); if(navigator.share) navigator.share({text:statsText}).catch(()=>{}); else copyStats(); }
+
+/* ---------- внести/поправить выполненную операцию (тап по ленте или по пилюле карточки) ---------- */
+let pastCardId=null, pastType='';
+function renderPastChips(){
+  $('pastChips').innerHTML=TYPES.map(t=>`<button class="wchip${pastType===t?' on':''}" onclick="pastType='${t}';renderPastChips()">${OPS[t].label}</button>`).join('');
+}
+function openPast(cardId, lane, tapMin){
+  pastCardId=cardId||null;
+  const s=readState(), N=stationCount(s);
+  const wsel=$('past_tower'); let wo=''; for(let i=0;i<N;i++) wo+=`<option value="${i}">Стол ${i+1}</option>`; wsel.innerHTML=wo;
+  const c=cardId?cards.find(x=>x.id===cardId):null;
+  if(c){
+    $('pastTitle').textContent='Выполненная — поправить';
+    pastType=OPS[c.type]?c.type:TYPES[0];
+    $('past_name').value=c.name||'';
+    $('past_end').value=minToClock(c.doneEnd!=null?c.doneEnd:0);
+    if(c.tower<N) wsel.value=String(c.tower);
+    $('pastReplanBtn').style.display='';
+    $('pastSaveBtn').textContent='Сохранить';
+  } else {
+    $('pastTitle').textContent='Внести выполненную';
+    pastType=TYPES[0];
+    $('past_name').value='';
+    // тапнули примерно на начало операции — «закончил» предзаполняем стартом+типовой длительностью
+    const t0=Math.max(0, Math.round((tapMin||0)));
+    $('past_end').value=minToClock(Math.min(s.day, t0+(s.dur[pastType]||45)));
+    wsel.value=String(Math.max(0,Math.min(N-1,lane||0)));
+    $('pastReplanBtn').style.display='none';
+    $('pastSaveBtn').textContent='Внести';
+  }
+  renderPastChips();
+  $('pastSheet').style.display='flex';
+}
+function closePast(){ $('pastSheet').style.display='none'; pastCardId=null; }
+function savePast(){
+  const s=readState();
+  let end=clockToMin($('past_end').value);
+  if(!isFinite(end)){ $('past_end').focus(); return; }
+  end=Math.max(5, Math.min(end, s.day));
+  const tower=Math.max(0, Math.round(+$('past_tower').value||0));
+  const nm=$('past_name').value.trim();
+  const dur=s.dur[pastType]||45;
+  if(pastCardId){
+    const c=cards.find(x=>x.id===pastCardId); if(!c) return;
+    if(OPS[pastType]) c.type=pastType;
+    c.name=nm; c.doneEnd=end; c.tower=tower; c.doneStart=Math.max(0,end-dur);
+  } else {
+    cards.push({id:newCardId(), type:(OPS[pastType]?pastType:TYPES[0]), label:'', joint:'knee', dur:null, name:nm,
+      status:'done', doneEnd:end, doneStart:Math.max(0,end-dur), tower, implants:[]});
+    // операция из прошлого → включаем «остаток дня», чтобы план ушёл за «сейчас», а блок лёг на своё место
+    if(isTodayPlan() && !useDoneLog){ useDoneLog=true; const cb=$('use_done'); if(cb) cb.checked=true; }
+  }
+  cardsRenderedSig=null; manualOps=null; saveSettings(); render();
+  closePast();
+}
+function pastToPlan(){
+  const c=cards.find(x=>x.id===pastCardId); if(!c) return;
+  c.status='plan'; c.doneEnd=null; c.doneStart=null;
+  cardsRenderedSig=null; saveSettings(); render(); closePast();
+}
 
 /* ---------- осмотры: утренняя запись → карточка операции ---------- */
 let examCardId=null;   // null = новый осмотр (карточка создастся при сохранении)
@@ -2292,14 +2374,27 @@ function setupGanttDrag(){
   const g=$('gantt'); if(!g || g._dragReady) return; g._dragReady=true;
   g.addEventListener('pointerdown', e=>{
     if(e.pointerType==='mouse' && e.button!==0) return;
-    const op=e.target.closest('.op'); if(!op || op.classList.contains('donep') || op.getAttribute('data-mid')==null) return;
-    drag={mid:op.getAttribute('data-mid'), x:e.clientX, y:e.clientY};
+    const op=e.target.closest('.op');
+    if(op && op.getAttribute('data-doneid')!=null){ drag={doneid:op.getAttribute('data-doneid'), x:e.clientX, y:e.clientY}; return; }
+    if(op && op.getAttribute('data-mid')!=null){ drag={mid:op.getAttribute('data-mid'), x:e.clientX, y:e.clientY}; return; }
+    // пустое место дорожки: запомнить стол и время под пальцем — «внести выполненную сюда»
+    const track=e.target.closest('.track');
+    if(track){
+      const lanes=[...document.querySelectorAll('#gantt .lane .track')];
+      const lane=lanes.indexOf(track);
+      const r=track.getBoundingClientRect();
+      const t=Math.round(((e.clientX-r.left)/Math.max(1,r.width))*(lastGanttDay||480)/5)*5;
+      drag={laneTap:lane, tapMin:t, x:e.clientX, y:e.clientY};
+    }
   });
   window.addEventListener('pointerup', e=>{
     if(!drag) return;
-    const mid=drag.mid, moved=Math.abs(e.clientX-drag.x)>8||Math.abs(e.clientY-drag.y)>8;
+    const d=drag, moved=Math.abs(e.clientX-d.x)>8||Math.abs(e.clientY-d.y)>8;
     drag=null;
-    if(!moved) openOpMenu(mid);
+    if(moved) return;
+    if(d.doneid!=null) openPast(d.doneid);
+    else if(d.mid!=null) openOpMenu(d.mid);
+    else if(d.laneTap!=null) openPast(null, d.laneTap, d.tapMin);
   });
   window.addEventListener('pointercancel', ()=>{ drag=null; });
 }
@@ -2327,14 +2422,12 @@ function drawGantt(s, sched, manual, conf){
     const win=s.tableWin[lane]||{from:0,to:day};
     if(win.from>0) ops+=`<div class="offwin" style="left:0;width:${win.from/day*100}%" title="Стол включается в ${fmtTime(win.from)}"></div>`;
     if(win.to<day) ops+=`<div class="offwin" style="left:${win.to/day*100}%;width:${(day-win.to)/day*100}%" title="Стол выключается в ${fmtTime(win.to)}"></div>`;
-    if(s.useDoneLog){
-      if(s.nowFloor>0) ops+=`<div class="pastb" style="left:0;width:${Math.min(100,s.nowFloor/day*100)}%" title="Прошло (08:00–${fmtTime(s.nowFloor)})"></div>`;
-      (s.doneLog||[]).filter(d=>d.tower===lane).forEach(d=>{
-        const ddur=s.dur[d.type]||0, dst=Math.max(0,d.end-ddur);
-        const dcol=OPS[d.type]?OPS[d.type].color:'#888', dlbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
-        ops+=`<div class="op donep" style="left:${dst/day*100}%;width:${ddur/day*100}%;background:${dcol}" title="Сделано (журнал): ${dlbl} ${fmtTime(dst)}–${fmtTime(d.end)}">${dlbl}</div>`;
-      });
-    }
+    if(s.useDoneLog && s.nowFloor>0) ops+=`<div class="pastb" style="left:0;width:${Math.min(100,s.nowFloor/day*100)}%" title="Прошло (08:00–${fmtTime(s.nowFloor)})"></div>`;
+    (s.doneLog||[]).filter(d=>d.tower===lane).forEach(d=>{
+      const ddur=s.dur[d.type]||0, dst=Math.max(0,d.end-ddur);
+      const dcol=OPS[d.type]?OPS[d.type].color:'#888', dlbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
+      ops+=`<div class="op donep" data-doneid="${d.id}" style="left:${dst/day*100}%;width:${ddur/day*100}%;background:${dcol}" title="Выполнена: ${escHtml(d.pat||'')} ${dlbl} ${fmtTime(dst)}–${fmtTime(d.end)} — нажмите, чтобы поправить время/стол">✓ ${d.pat?escHtml(d.pat):dlbl}</div>`;
+    });
     (blk[lane]||[]).forEach(iv=>{
       const bl=iv[0]/day*100, bw=(iv[1]-iv[0])/day*100;
       ops+=`<div class="blockb" style="left:${bl}%;width:${bw}%" title="Стол недоступен ${fmtTime(iv[0])}–${fmtTime(iv[1])}"></div>`;
