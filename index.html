@@ -1729,7 +1729,8 @@ function saveSettings(){
 }
 function loadSettings(){
   try{
-    const o=JSON.parse(localStorage.getItem(SETTINGS_KEY)); if(!o) return;
+    const o=JSON.parse(localStorage.getItem(SETTINGS_KEY));
+    if(o){
     if(o.fields) PERSIST_IDS.forEach(id=>{const el=$(id); if(el && o.fields[id]!=null) el.value=o.fields[id];});
     if(Array.isArray(o.tableWin)) tableWin=o.tableWin.map(w=>({from:+w.from||0,to:+w.to||0}));
     if(Array.isArray(o.blocks)) manualBlocks=o.blocks;
@@ -1738,6 +1739,7 @@ function loadSettings(){
     useDoneLog=!!o.useDoneLog;
     const c=$('use_done'); if(c) c.checked=useDoneLog;
     if(Array.isArray(o.surgeons)) surgeonList=sanitizeSurgeons(o.surgeons);
+    }
   }catch(e){}
   if(!surgeonList.length){
     // первый запуск: состав отделения по умолчанию (навыки — все операции; снимите лишние галочки)
