@@ -205,6 +205,12 @@
   .crow .dnord{width:54px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 4px;font-size:14px;text-align:center;font-weight:600;cursor:pointer}
   .examta{width:100%;min-height:220px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--txt);resize:vertical}
   .examta:focus{outline:none;border-color:var(--accent)}
+  .exline{width:100%;font-size:16px;font-weight:600;padding:11px 13px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;color:var(--txt)}
+  .exline:focus{outline:none;border-color:var(--accent)}
+  .exlbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;margin:10px 0 5px}
+  .exgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .exgrid .cname{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;color:var(--txt);font-size:14.5px}
+  .exgrid .cname:focus{outline:none;border-color:var(--accent)}
   .crow .exbtn{flex:0 0 auto;border:1px solid var(--line);background:var(--panel2);border-radius:9px;width:32px;height:32px;font-size:14px;cursor:pointer}
   .crow .exbtn.has{border-color:var(--gold);background:#fff}
   /* undo-снекбар */
@@ -498,8 +504,18 @@
 <div id="examSheet" class="wiz noprint" style="display:none;z-index:105">
   <div class="wizcard" style="max-width:560px">
     <div class="wizhead"><b id="examTitle">Осмотр</b><button class="x implhead-x" onclick="closeExam()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
-    <div class="note" style="margin:0 0 8px">Первая строка — «Фамилия что-где» (например «Байрамов левое плечо»), дальше свободный текст: анамнез, аллергии, АД, ЭЛН… Диктовка — микрофоном на клавиатуре.</div>
-    <textarea id="examText" class="examta" placeholder="Байрамов левое плечо&#10;Первый вывих в 2016 году&#10;Аллергии нет&#10;181/90&#10;ЭЛН нужен" oninput="examParseHint()"></textarea>
+    <div class="note" style="margin:0 0 8px">Диктовка в любое поле — микрофоном на клавиатуре.</div>
+    <input type="text" class="cname exline" id="exam_line" placeholder="Фамилия и что оперируем — «Байрамов левое плечо»" oninput="examParseHint()">
+    <div class="exlbl">Анамнез</div>
+    <textarea id="exam_hist" class="examta" style="min-height:88px" placeholder="Первый вывих в 2016 во время драки, в последующем 6 вывихов…"></textarea>
+    <div class="exgrid">
+      <div style="grid-column:1/-1"><div class="exlbl">Аллергии</div><input type="text" class="cname" id="exam_all" placeholder="нет / пенициллин — сыпь…"></div>
+      <div><div class="exlbl">Рост, см</div><input type="number" class="cname" id="exam_h" placeholder="181" min="0"></div>
+      <div><div class="exlbl">Вес, кг</div><input type="number" class="cname" id="exam_w" placeholder="90" min="0"></div>
+      <div style="grid-column:1/-1"><div class="exlbl">Больничный (ЭЛН)</div><input type="text" class="cname" id="exam_eln" placeholder="нужен / не нужен / открыт с 28.08 по 09.09"></div>
+    </div>
+    <div class="exlbl">Прочее</div>
+    <textarea id="exam_misc" class="examta" style="min-height:60px" placeholder="Ковид отр · операции в прошлом · гемотрансфузии · пил воду в 6:00…"></textarea>
     <div class="wizlbl" style="margin-top:10px">Операция <span id="examHint" style="text-transform:none;letter-spacing:0"></span></div>
     <div class="wizchips" id="examTypeChips"></div>
     <div class="btnrow" style="margin-top:12px">
@@ -991,6 +1007,7 @@ function sanitizeCards(arr){
     tower:isFinite(+x.tower)?Math.max(0,Math.round(+x.tower)):0,
     implants:Array.isArray(x.implants)?x.implants:[],
     exam:typeof x.exam==='string'?x.exam:'',
+    examF:(x.examF&&typeof x.examF==='object')?x.examF:null,
     photos:Array.isArray(x.photos)?x.photos.filter(ph=>typeof ph==='string'&&ph.indexOf('data:image')===0):[],
   }));
 }
@@ -1234,7 +1251,7 @@ function shareStats(){ renderStats(); if(navigator.share) navigator.share({text:
 let examCardId=null;   // null = новый осмотр (карточка создастся при сохранении)
 let examType='';       // выбранный тип операции для нового осмотра
 function examParse(text){
-  const first=(text.split('\n')[0]||'').trim();
+  const first=(text||'').trim();
   const words=first.split(/\s+/).filter(Boolean);
   const name=words[0]||'';
   const low=first.toLowerCase();
@@ -1249,45 +1266,65 @@ function examSuggestTypes(joint){
   return TYPES.slice();
 }
 function renderExamChips(){
-  const info=examParse($('examText').value);
+  const info=examParse($('exam_line').value);
   const list=examSuggestTypes(info.joint);
   $('examTypeChips').innerHTML=list.map(t=>`<button class="wchip${examType===t?' on':''}" onclick="examType='${t}';renderExamChips()">${OPS[t].label}</button>`).join('')
     +`<button class="wchip${examType==='later'?' on':''}" onclick="examType='later';renderExamChips()">выберу позже</button>`;
 }
 function examParseHint(){
-  const info=examParse($('examText').value);
+  const info=examParse($('exam_line').value);
   $('examHint').textContent=info.name?`— ${info.name}${info.joint?(info.joint==='shoulder'?' · плечо':' · колено/голеностоп'):''}`:'';
   renderExamChips();
+}
+function examFields(){ return {line:$('exam_line'),hist:$('exam_hist'),all:$('exam_all'),h:$('exam_h'),w:$('exam_w'),eln:$('exam_eln'),misc:$('exam_misc')}; }
+function composeExam(f){
+  const out=[];
+  if(f.line) out.push(f.line);
+  if(f.hist) out.push(f.hist);
+  if(f.all) out.push('Аллергии: '+f.all);
+  if(f.h||f.w) out.push('Рост/вес: '+(f.h||'—')+'/'+(f.w||'—'));
+  if(f.eln) out.push('ЭЛН: '+f.eln);
+  if(f.misc) out.push(f.misc);
+  return out.join('\n');
 }
 function openExam(cardId){
   examCardId=cardId||null;
   const c=cardId?cards.find(x=>x.id===cardId):null;
   $('examTitle').textContent=c?('Осмотр — '+(c.name||cardLabel(c))):'Осмотр';
-  $('examText').value=(c&&c.exam)||'';
+  const F=examFields();
+  Object.values(F).forEach(el=>el.value='');
+  if(c){
+    if(c.examF){ F.line.value=c.examF.line||''; F.hist.value=c.examF.hist||''; F.all.value=c.examF.all||''; F.h.value=c.examF.h||''; F.w.value=c.examF.w||''; F.eln.value=c.examF.eln||''; F.misc.value=c.examF.misc||''; }
+    else if(c.exam){ const lines=c.exam.split('\n'); F.line.value=lines[0]||''; F.hist.value=lines.slice(1).join('\n'); }
+    if(!F.line.value && c.name) F.line.value=c.name;
+  }
   examType=c?c.type:'';
   examParseHint();
   $('examSheet').style.display='flex';
-  setTimeout(()=>$('examText').focus(),50);
+  setTimeout(()=>F.line.focus(),50);
 }
 function closeExam(){ $('examSheet').style.display='none'; examCardId=null; }
 function saveExam(andNext){
-  const txt=$('examText').value.trim();
-  if(!txt){ $('examText').focus(); return; }
-  const info=examParse(txt);
+  const F=examFields();
+  const f={line:F.line.value.trim(),hist:F.hist.value.trim(),all:F.all.value.trim(),h:F.h.value.trim(),w:F.w.value.trim(),eln:F.eln.value.trim(),misc:F.misc.value.trim()};
+  if(!f.line){ F.line.focus(); return; }
+  const txt=composeExam(f);
+  const info=examParse(f.line);
   if(examCardId){
     const c=cards.find(x=>x.id===examCardId); if(!c) return;
-    c.exam=txt; if(!c.name&&info.name) c.name=info.name;
+    c.examF=f; c.exam=txt; if(!c.name&&info.name) c.name=info.name;
     if(examType && examType!=='later' && OPS[examType]) c.type=examType;
   } else {
     const t=(examType && examType!=='later' && OPS[examType])?examType:(examSuggestTypes(info.joint)[0]||TYPES[0]);
-    cards.push({id:newCardId(), type:t, label:'', joint:'knee', dur:null, name:info.name||'', status:'plan', doneEnd:null, tower:0, implants:[], exam:txt});
+    cards.push({id:newCardId(), type:t, label:'', joint:'knee', dur:null, name:info.name||'', status:'plan', doneEnd:null, tower:0, implants:[], exam:txt, examF:f});
   }
   cardsRenderedSig=null; saveSettings(); render();
-  if(andNext){ examCardId=null; examType=''; $('examTitle').textContent='Осмотр'; $('examText').value=''; examParseHint(); $('examText').focus(); }
+  if(andNext){ examCardId=null; examType=''; $('examTitle').textContent='Осмотр'; Object.values(F).forEach(el=>el.value=''); examParseHint(); F.line.focus(); }
   else closeExam();
 }
 function shareExam(){
-  const txt=$('examText').value.trim(); if(!txt) return;
+  const txt=composeExam({line:$('exam_line').value.trim(),hist:$('exam_hist').value.trim(),all:$('exam_all').value.trim(),h:$('exam_h').value.trim(),w:$('exam_w').value.trim(),eln:$('exam_eln').value.trim(),misc:$('exam_misc').value.trim()});
+  if(!txt) return;
   if(navigator.share) navigator.share({text:txt}).catch(()=>{});
   else if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
 }
@@ -2508,7 +2545,7 @@ function renderSter(){
 // изменение настроек/плана сбрасывает ручную раскладку (иначе она устаревает: геометрия, фантомные столы);
 // поля-формы, которые сами по себе план не меняют (дата, заготовки журнала/блокировок), раскладку не трогают
 const MANUAL_KEEP_IDS=['p_date','done_type','done_end','done_tower','blk_station','blk_from','blk_to','preset_sel','impl_pat','impl_name','impl_qty'];
-document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor') || e.target.closest('#cardList') || e.target.id==='examText'))){ manualOps=null; } render(); });
+document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEEP_IDS.indexOf(e.target.id)>=0 || e.target.closest('#implEditor') || e.target.closest('#cardList') || e.target.closest('#examSheet')))){ manualOps=null; } render(); });
 // колесо мыши над числовым полем не должно менять значение, но и не выбивать фокус при прокрутке страницы
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(()=>{ renderSter(); renderLive(); },1000);
