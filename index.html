@@ -1235,13 +1235,18 @@ function undoRestore(){
 /* ---------- итоги: факт-хронометраж и месячная сводка (по выполненным карточкам) ---------- */
 let statsText='';
 function collectStats(daysBack){
-  const store=Object.assign({}, dayStore); if(curDay) store[curDay]={cards};
+  const store=Object.assign({}, dayStore); if(curDay) store[curDay]={cards, blocks:manualBlocks};
   const lim=new Date(); lim.setDate(lim.getDate()-daysBack);
   const limStr=lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
-  const ops={}, impl={}, durs={}; let total=0, days=0, photos=0;
+  const ops={}, impl={}, durs={}, loss={}; let total=0, days=0, photos=0, lossMin=0;
   for(const ds in store){
     if(ds<limStr) continue;
     const cs=(store[ds]&&store[ds].cards)||[]; let anyDone=false;
+    ((store[ds]&&store[ds].blocks)||[]).forEach(b=>{
+      const m=Math.max(0,(+b.to||0)-(+b.from||0)); if(!m) return;
+      const k=(b.note&&b.note.trim())||'Без пометки';
+      loss[k]=(loss[k]||0)+m; lossMin+=m;
+    });
     cs.forEach(c=>{
       if(c.status!=='done') return;
       anyDone=true; total++;
@@ -1257,7 +1262,7 @@ function collectStats(daysBack){
     });
     if(anyDone) days++;
   }
-  return {ops,impl,durs,total,days,photos};
+  return {ops,impl,durs,total,days,photos,loss,lossMin};
 }
 function renderStats(){
   const host=$('statsBody'); if(!host) return;
@@ -1275,6 +1280,16 @@ function renderStats(){
   if(implRows.length){ html+='<table><tbody>'+implRows.map(([k,v])=>`<tr><td>${escHtml(k)}</td><td class="r"><b>× ${v}</b></td></tr>`).join('')+'</tbody></table>';
     implRows.forEach(([k,v])=>{ txt+=`  ${k} × ${v}\n`; }); }
   else { html+='<div class="note">списаний за период нет</div>'; txt+='  —\n'; }
+  // потери времени: перерывы с причинами
+  const lossRows=Object.entries(st.loss).sort((a,b)=>b[1]-a[1]);
+  html+='<h3>Потери времени — перерывы</h3>';
+  if(lossRows.length){
+    const hh=Math.floor(st.lossMin/60), mm=st.lossMin%60;
+    html+=`<div class="note" style="margin:0 0 6px">всего <b>${hh?hh+' ч ':''}${mm} мин</b> простоя столов за период</div>`;
+    html+='<table><tbody>'+lossRows.map(([k,v])=>`<tr><td>${escHtml(k)}</td><td class="r"><b>${v} мин</b></td></tr>`).join('')+'</tbody></table>';
+    txt+='\nПотери времени (перерывы): всего '+st.lossMin+' мин\n';
+    lossRows.forEach(([k,v])=>{ txt+=`  ${k}: ${v} мин\n`; });
+  } else html+='<div class="note">перерывов за период не отмечено — вносите их тапом по пустому месту ленты, и здесь появится статистика простоев</div>';
   // факт против норматива
   html+='<h3>Длительности: факт против норматива</h3>';
   txt+='\nДлительности (факт/норматив, мин):\n';
@@ -2078,16 +2093,19 @@ function simulate(s, order){
   const liveOpt=s.useDoneLog && s.aggReadyMin && (s.aggReadyMin.optic||[]).length>0;
   const liveShv=s.useDoneLog && s.aggReadyMin && (s.aggReadyMin.shaver||[]).length>0;
   // ОСТАТОК ДНЯ: «эхо прошлого» — занять ресурсы под уже выполненные операции (журнал)
-  if(s.useDoneLog && s.doneLog && s.doneLog.length){
+  // выполненные и идущие операции ВСЕГДА держат стол и ресурсы (иначе план кладётся поверх них)
+  if(s.doneLog && s.doneLog.length){
     const past=s.doneLog.slice().sort((a,b)=>a.end-b.end);
     for(const d of past){
-      const spec=OPS[d.type]; if(!spec) continue;
+      const spec=OPS[d.type]||null;   // «своя» операция: тип неизвестен, но стол и хирург всё равно заняты
       const end=d.end;
       if(d.tower!=null && d.tower<N) stations[d.tower]=Math.max(stations[d.tower], end+(s.turnover||0));
-      if(!liveOpt && optics.length){const oi2=argmin(optics); optics[oi2]=Math.max(optics[oi2], end+s.ster);}
-      if(!spec.sets.some(c=>liveCats[c])){ const ss2=pickSet(sets,spec.sets); if(ss2) sets[ss2.cat][ss2.idx]=Math.max(sets[ss2.cat][ss2.idx], end+s.ster); }
-      if(spec.shaver && !liveShv && shavers.length){const si2=argmin(shavers); shavers[si2]=Math.max(shavers[si2], end+s.ster);}
-      const sgi2=pickSurgeon(surgeons,d.type); if(sgi2>=0) surgeons[sgi2].t=Math.max(surgeons[sgi2].t, end);
+      if(spec){
+        if(!liveOpt && optics.length){const oi2=argmin(optics); optics[oi2]=Math.max(optics[oi2], end+s.ster);}
+        if(!spec.sets.some(c=>liveCats[c])){ const ss2=pickSet(sets,spec.sets); if(ss2) sets[ss2.cat][ss2.idx]=Math.max(sets[ss2.cat][ss2.idx], end+s.ster); }
+        if(spec.shaver && !liveShv && shavers.length){const si2=argmin(shavers); shavers[si2]=Math.max(shavers[si2], end+s.ster);}
+      }
+      const sgi2=pickSurgeon(surgeons, spec?d.type:null); if(sgi2>=0) surgeons[sgi2].t=Math.max(surgeons[sgi2].t, end);
     }
   }
   // ОСТАТОК ДНЯ: живой таймер стерилизации наборов — точная готовность конкретных наборов (приоритетно)
