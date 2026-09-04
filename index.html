@@ -84,9 +84,10 @@
       box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);touch-action:none}
   .anesb{position:absolute;top:2px;height:26px;border-radius:5px 0 0 5px;opacity:.85;
       background:repeating-linear-gradient(45deg,#7b8794 0,#7b8794 4px,#9aa5b1 4px,#9aa5b1 8px)}
-  .blockb{position:absolute;top:0;height:30px;border-radius:4px;z-index:0;
+  .blockb{position:absolute;top:0;height:30px;border-radius:4px;z-index:1;cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;
       background:repeating-linear-gradient(45deg,rgba(231,76,60,.30) 0,rgba(231,76,60,.30) 6px,rgba(231,76,60,.12) 6px,rgba(231,76,60,.12) 12px);
       box-shadow:inset 0 0 0 1px rgba(231,76,60,.45)}
+  .blknote{font-size:10px;color:#8a2f24;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
   .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--muted)}
   .note{font-size:12px;color:var(--muted);margin-top:10px}
   .muted{color:var(--muted)}
@@ -505,21 +506,40 @@
 <!-- ВНЕСТИ/ПОПРАВИТЬ ВЫПОЛНЕННУЮ ОПЕРАЦИЮ (тап по ленте) -->
 <div id="pastSheet" class="wiz noprint" style="display:none;z-index:106" onclick="if(event.target===this)closePast()">
   <div class="wizcard" style="max-width:430px">
-    <div class="wizhead"><b id="pastTitle">Внести выполненную</b><button class="x implhead-x" onclick="closePast()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
-    <div class="wizlbl">Операция</div>
-    <div class="wizchips" id="pastChips"></div>
-    <div class="blkrow" style="margin-top:12px">
-      <input type="text" class="cname" id="past_name" placeholder="Фамилия пациента" style="flex:1 1 140px">
+    <div class="wizhead"><b id="pastTitle">Внести на ленту</b><button class="x implhead-x" onclick="closePast()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
+    <div class="wizchips" id="pastModeRow" style="margin-bottom:12px">
+      <button class="wchip on" id="pmOp" onclick="setPastMode('op')">✓ Операция</button>
+      <button class="wchip" id="pmBr" onclick="setPastMode('break')">⏸ Перерыв</button>
     </div>
-    <div class="blkrow" style="margin-top:8px">
-      <span class="sep">закончил в</span><input type="time" id="past_end" step="300">
-      <select class="blk" id="past_tower"></select>
+    <div id="pastOpSec">
+      <div class="wizlbl">Операция</div>
+      <div class="wizchips" id="pastChips"></div>
+      <div class="blkrow" style="margin-top:12px">
+        <input type="text" class="cname" id="past_name" placeholder="Фамилия пациента" style="flex:1 1 140px">
+      </div>
+      <div class="blkrow" style="margin-top:8px">
+        <span class="sep">закончил в</span><input type="time" id="past_end" step="300">
+        <select class="blk" id="past_tower"></select>
+      </div>
+    </div>
+    <div id="pastBrSec" style="display:none">
+      <div class="wizlbl">Причина</div>
+      <div class="wizchips" id="brChips"></div>
+      <div class="blkrow" style="margin-top:10px">
+        <input type="text" class="cname" id="br_note" placeholder="Своя пометка — что случилось" style="flex:1 1 160px">
+      </div>
+      <div class="blkrow" style="margin-top:8px">
+        <span class="sep">с</span><input type="time" id="br_from" step="300">
+        <span class="sep">до</span><input type="time" id="br_to" step="300">
+        <select class="blk" id="br_station"></select>
+      </div>
     </div>
     <div class="btnrow" style="margin-top:14px">
       <button class="btn primary" id="pastSaveBtn" onclick="savePast()">Внести</button>
       <button class="btn" id="pastReplanBtn" onclick="pastToPlan()" style="display:none">↩ Вернуть в план</button>
+      <button class="btn warn" id="brDelBtn" onclick="deleteBreak()" style="display:none">Убрать перерыв</button>
     </div>
-    <div class="note" style="margin-top:10px">Так вносятся операции задним числом: «в 9:00 сделал ПКС, забыл внести». Выполненные блоки на ленте — нажмите, чтобы поправить время или стол.</div>
+    <div class="note" style="margin-top:10px" id="pastNote">Тап по пустому месту ленты: операция задним числом или перерыв с причиной («сломалась стойка», «уборка затянулась»). План обтекает перерывы — так двигаются времена операций.</div>
   </div>
 </div>
 
@@ -1295,7 +1315,20 @@ function copyStats(){ renderStats(); if(navigator.clipboard&&navigator.clipboard
 function shareStats(){ renderStats(); if(navigator.share) navigator.share({text:statsText}).catch(()=>{}); else copyStats(); }
 
 /* ---------- внести/поправить выполненную операцию (тап по ленте или по пилюле карточки) ---------- */
-let pastCardId=null, pastType='';
+let pastCardId=null, pastType='', pastMode='op', pastBlkId=null, pastLane=0, pastTap=0;
+const BR_REASONS=['Поломка оборудования','Уборка затянулась','Ждали пациента','Ждали анестезиолога','Совещание','Обед'];
+function setPastMode(m){
+  pastMode=m;
+  $('pmOp').classList.toggle('on',m==='op'); $('pmBr').classList.toggle('on',m==='break');
+  $('pastOpSec').style.display=m==='op'?'':'none';
+  $('pastBrSec').style.display=m==='break'?'':'none';
+  $('pastReplanBtn').style.display='none';
+  $('brDelBtn').style.display=(m==='break'&&pastBlkId)?'':'none';
+  $('pastSaveBtn').textContent=m==='break'?(pastBlkId?'Сохранить перерыв':'Добавить перерыв'):(pastCardId?'Сохранить':'Внести');
+}
+function renderBrChips(){
+  $('brChips').innerHTML=BR_REASONS.map(r=>`<button class="wchip${$('br_note').value===r?' on':''}" onclick="$('br_note').value='${r}';renderBrChips()">${r}</button>`).join('');
+}
 function renderPastChips(){
   $('pastChips').innerHTML=TYPES.map(t=>`<button class="wchip${pastType===t?' on':''}" onclick="pastType='${t}';renderPastChips()">${OPS[t].label}</button>`).join('');
 }
@@ -1324,10 +1357,44 @@ function openPast(cardId, lane, tapMin){
     $('pastSaveBtn').textContent='Внести';
   }
   renderPastChips();
+  // секция перерыва: предзаполнение от места тапа
+  pastBlkId=null; pastLane=Math.max(0,lane||((c&&c.tower)||0)); pastTap=Math.max(0,Math.round(tapMin||0));
+  const bsel=$('br_station'); let bo='<option value="all">Все столы</option>'; for(let i=0;i<N;i++) bo+=`<option value="${i}">Стол ${i+1}</option>`; bsel.innerHTML=bo; bsel.value=String(pastLane);
+  $('br_from').value=minToClock(pastTap); $('br_to').value=minToClock(Math.min(s.day,pastTap+30)); $('br_note').value='';
+  renderBrChips();
+  setPastMode('op');
+  if(c){ $('pastReplanBtn').style.display=''; }
   $('pastSheet').style.display='flex';
+}
+function openBreakEdit(blkid){
+  const b=manualBlocks.find(x=>x.id===blkid); if(!b) return;
+  openPast(null, (b.station==='all'?0:b.station), b.from);
+  pastBlkId=blkid;
+  $('br_from').value=minToClock(b.from); $('br_to').value=minToClock(b.to);
+  $('br_note').value=b.note||'';
+  $('br_station').value=b.station==='all'?'all':String(b.station);
+  renderBrChips();
+  setPastMode('break');
+  $('pastTitle').textContent='Перерыв — поправить';
+}
+function saveBreak(){
+  const from=clockToMin($('br_from').value), to=clockToMin($('br_to').value);
+  if(!isFinite(from)||!isFinite(to)||to<=from){ $('br_to').focus(); return; }
+  const stv=$('br_station').value, station=stv==='all'?'all':Math.max(0,Math.round(+stv||0));
+  const note=$('br_note').value.trim();
+  if(pastBlkId){
+    const b=manualBlocks.find(x=>x.id===pastBlkId); if(b){ b.from=from; b.to=to; b.station=station; b.note=note; }
+  } else manualBlocks.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6), station, from, to, note});
+  manualOps=null; saveSettings(); render(); closePast();
+}
+function deleteBreak(){
+  if(!pastBlkId) return;
+  manualBlocks=manualBlocks.filter(b=>b.id!==pastBlkId);
+  manualOps=null; saveSettings(); render(); closePast();
 }
 function closePast(){ $('pastSheet').style.display='none'; pastCardId=null; }
 function savePast(){
+  if(pastMode==='break'){ saveBreak(); return; }
   const s=readState();
   let end=clockToMin($('past_end').value);
   if(!isFinite(end)){ $('past_end').focus(); return; }
@@ -2421,6 +2488,8 @@ function setupGanttDrag(){
   g.addEventListener('pointerdown', e=>{
     if(e.pointerType==='mouse' && e.button!==0) return;
     const op=e.target.closest('.op');
+    const bb=e.target.closest('.blockb');
+    if(bb){ drag={blkid:bb.getAttribute('data-blkid'), x:e.clientX, y:e.clientY}; return; }
     if(op && op.getAttribute('data-runid')!=null){ drag={runid:op.getAttribute('data-runid'), x:e.clientX, y:e.clientY}; return; }
     if(op && op.getAttribute('data-doneid')!=null){ drag={doneid:op.getAttribute('data-doneid'), x:e.clientX, y:e.clientY}; return; }
     if(op && op.getAttribute('data-mid')!=null){ drag={mid:op.getAttribute('data-mid'), x:e.clientX, y:e.clientY}; return; }
@@ -2439,7 +2508,8 @@ function setupGanttDrag(){
     const d=drag, moved=Math.abs(e.clientX-d.x)>8||Math.abs(e.clientY-d.y)>8;
     drag=null;
     if(moved) return;
-    if(d.runid!=null) openRunMenu(d.runid);
+    if(d.blkid!=null) openBreakEdit(d.blkid);
+    else if(d.runid!=null) openRunMenu(d.runid);
     else if(d.doneid!=null) openPast(d.doneid);
     else if(d.mid!=null) openOpMenu(d.mid);
     else if(d.laneTap!=null) openPast(null, d.laneTap, d.tapMin);
@@ -2477,9 +2547,9 @@ function drawGantt(s, sched, manual, conf){
       if(d.run) ops+=`<div class="op oprun" data-runid="${d.id}" style="left:${dst/day*100}%;width:${ddur/day*100}%;background:${dcol}" title="Идёт: ${escHtml(d.pat||'')} ${dlbl} с ${fmtTime(dst)} — нажмите, чтобы завершить">▶ ${d.pat?escHtml(d.pat):dlbl}</div>`;
       else ops+=`<div class="op donep" data-doneid="${d.id}" style="left:${dst/day*100}%;width:${ddur/day*100}%;background:${dcol}" title="Выполнена: ${escHtml(d.pat||'')} ${dlbl} ${fmtTime(dst)}–${fmtTime(d.end)} — нажмите, чтобы поправить время/стол">✓ ${d.pat?escHtml(d.pat):dlbl}</div>`;
     });
-    (blk[lane]||[]).forEach(iv=>{
-      const bl=iv[0]/day*100, bw=(iv[1]-iv[0])/day*100;
-      ops+=`<div class="blockb" style="left:${bl}%;width:${bw}%" title="Стол недоступен ${fmtTime(iv[0])}–${fmtTime(iv[1])}"></div>`;
+    (s.blocks||[]).filter(b=>b.station==='all'||b.station===lane).forEach(b=>{
+      const f=Math.max(0,b.from), t=Math.min(day,b.to); if(t<=f) return;
+      ops+=`<div class="blockb" data-blkid="${b.id}" style="left:${f/day*100}%;width:${(t-f)/day*100}%" title="Перерыв ${fmtTime(f)}–${fmtTime(t)}${b.note?' · '+escHtml(b.note):''} — нажмите, чтобы поправить"><span class="blknote">${b.note?escHtml(b.note):'⏸'}</span></div>`;
     });
     sched.filter(o=>o.tower===lane).forEach(o=>{
       const par=o.anesMode==='par';
@@ -2588,7 +2658,7 @@ function renderBlocks(s){
     if([...sel.options].some(o=>o.value===keep)) sel.value=keep;
   }
   const chips=manualBlocks.slice().sort((a,b)=>a.from-b.from).map(b=>
-    `<span class="chip run"><span class="rem">${blkStationLabel(b.station)}</span><span class="muted">${minToClock(b.from)}–${minToClock(b.to)}</span><button class="x" onclick="removeBlock('${b.id}')" title="снять">×</button></span>`
+    `<span class="chip run"><span class="rem">${blkStationLabel(b.station)}</span><span class="muted">${minToClock(b.from)}–${minToClock(b.to)}${b.note?' · '+escHtml(b.note):''}</span><button class="x" onclick="removeBlock('${b.id}')" title="снять">×</button></span>`
   ).join('');
   $('blkChips').innerHTML=chips;
   $('blkClearRow').style.display=manualBlocks.length?'flex':'none';
