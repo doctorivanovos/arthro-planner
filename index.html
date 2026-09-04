@@ -286,6 +286,7 @@
   input[type=checkbox]{width:20px;height:20px;cursor:pointer;accent-color:var(--accent)}
   .pastb{position:absolute;top:0;height:30px;z-index:0;background:rgba(124,113,103,.24)}
   .op.donep{opacity:.42;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+  .op.oprun{box-shadow:0 0 0 2px var(--warn), inset 0 0 0 1px rgba(255,255,255,.35);font-weight:700}
   .nowline{position:absolute;top:0;height:30px;width:3px;border-radius:2px;background:var(--accent);z-index:6;box-shadow:0 0 6px var(--accent)}
   .axis .nowtick{color:var(--accent);font-weight:700}
   .axis .nowtick:before{border-color:var(--accent)}
@@ -552,7 +553,8 @@
   <div class="wizcard" style="max-width:400px">
     <div class="wizhead"><b id="opMenuTitle"></b><button class="x implhead-x" onclick="closeOpMenu()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
     <div class="note" id="opMenuSub" style="margin:0 0 12px"></div>
-    <button class="btn primary wizgo" style="margin-top:0" onclick="markDoneFromPlan(true)">✓ Выполнена — списать импланты</button>
+    <button class="btn primary wizgo" style="margin-top:0" onclick="markStartFromPlan()">▶ Начали операцию</button>
+    <button class="btn wizgo" onclick="markDoneFromPlan(true)">✓ Выполнена — списать импланты</button>
     <button class="btn wizgo" onclick="markDoneFromPlan(false)">✓ Выполнена (без имплантов)</button>
     <div class="note" style="margin-top:10px">Операция попадёт в «Журнал выполненного». Перетаскивание блока работает как раньше — меню открывает только короткий тап.</div>
   </div>
@@ -1023,9 +1025,10 @@ function sanitizeCards(arr){
     joint:(x.joint&&JOINTS[x.joint])?x.joint:'knee',
     dur:(isFinite(+x.dur)&&+x.dur>0)?Math.round(+x.dur):null,
     name:typeof x.name==='string'?x.name:'',
-    status:x.status==='done'?'done':'plan',
+    status:(x.status==='done'||x.status==='op')?x.status:'plan',
     doneEnd:isFinite(+x.doneEnd)?+x.doneEnd:null,
     doneStart:isFinite(+x.doneStart)?+x.doneStart:null,
+    opStart:isFinite(+x.opStart)?+x.opStart:null,
     tower:isFinite(+x.tower)?Math.max(0,Math.round(+x.tower)):0,
     implants:Array.isArray(x.implants)?x.implants:[],
     exam:typeof x.exam==='string'?x.exam:'',
@@ -1033,7 +1036,8 @@ function sanitizeCards(arr){
     photos:Array.isArray(x.photos)?x.photos.filter(ph=>typeof ph==='string'&&ph.indexOf('data:image')===0):[],
   }));
 }
-const planCards=()=>cards.filter(c=>c.status!=='done');
+const planCards=()=>cards.filter(c=>c.status==='plan');
+const runningCards=()=>cards.filter(c=>c.status==='op');
 const doneCards=()=>cards.filter(c=>c.status==='done');
 function cardLabel(c){ return c.type==='custom' ? ((c.label&&c.label.trim())||'Операция') : (OPS[c.type]?OPS[c.type].label:c.type); }
 function cardColor(c){ return c.type==='custom' ? ('var(--'+JOINTS[(c.joint&&JOINTS[c.joint])?c.joint:'knee'].cat+')') : (OPS[c.type]?OPS[c.type].color:'var(--tool)'); }
@@ -1047,7 +1051,14 @@ function cardSpecOf(s,c){
   return {type:c.type, _card:c, dur:(c.dur>0?+c.dur:null)};   // остальное opSpec возьмёт из типа
 }
 // «журнал выполненного» для движка/ленты — производный от карточек-«выполнена»
-function doneLogView(){ return doneCards().map(c=>({id:c.id, type:(OPS[c.type]?c.type:'custom'), end:(c.doneEnd!=null?c.doneEnd:0), tower:c.tower||0, lbl:(OPS[c.type]?undefined:cardLabel(c)), pat:c.name, implants:c.implants, photos:c.photos||[]})); }
+function doneLogView(){
+  const done=doneCards().map(c=>({id:c.id, type:(OPS[c.type]?c.type:'custom'), end:(c.doneEnd!=null?c.doneEnd:0), tower:c.tower||0, lbl:(OPS[c.type]?undefined:cardLabel(c)), pat:c.name, implants:c.implants, photos:c.photos||[]}));
+  // идущие операции: занимают стол/набор от фактического старта до ожидаемого конца
+  const run=runningCards().map(c=>{ const dur=(c.dur>0?+c.dur:(durOfType(c.type)||45));
+    return {id:c.id, run:true, type:(OPS[c.type]?c.type:'custom'), end:Math.max(5,(c.opStart||0)+dur), tower:c.tower||0, lbl:(OPS[c.type]?undefined:cardLabel(c)), pat:c.name, implants:[], photos:[]}; });
+  return done.concat(run);
+}
+function durOfType(t){ const el=$('d_'+t); return el?Math.max(5,Math.round(parseFloat(el.value)||45)):45; }
 function addCard(type){ cards.push({id:newCardId(), type, label:'', joint:'knee', dur:null, name:'', status:'plan', doneEnd:null, tower:0, implants:[]}); manualOps=null; saveSettings(); render(); }
 function removeLastCard(type){
   for(let i=cards.length-1;i>=0;i--){ const c=cards[i];
@@ -1110,15 +1121,28 @@ function clearPlanCards(){
   if(planCards().length) takeUndo('План обнулён');
   cards=doneCards(); manualOps=null; saveSettings(); render();
 }
+function cardStart(id){
+  const c=cards.find(x=>x.id===id); if(!c||c.status==='done') return;
+  const sch=(lastPlanSched||[]).find(o=>o._card===c);
+  const now=new Date(); const wall=(now.getHours()*60+now.getMinutes())-8*60;
+  c.status='op';
+  c.opStart=Math.max(0, Math.round(wall));
+  if(sch) c.tower=sch.tower;
+  // идущая операция должна лечь на своё фактическое место: включаем «остаток дня»
+  if(isTodayPlan() && !useDoneLog){ useDoneLog=true; const cb=$('use_done'); if(cb) cb.checked=true; }
+  cardsRenderedSig=null; manualOps=null; saveSettings(); render();
+}
 function toggleCardDone(id, withImpl){
   const c=cards.find(x=>x.id===id); if(!c) return;
   if(c.status==='done' && !withImpl){ c.status='plan'; c.doneEnd=null; }
   else if(c.status!=='done'){
     const sch=(lastPlanSched||[]).find(o=>o._card===c);
     const now=new Date(); const wall=(now.getHours()*60+now.getMinutes())-8*60;
+    const wasRunning=(c.status==='op');
     c.status='done';
-    c.doneEnd=Math.max(0, Math.round(sch ? (wall>=sch.end ? sch.end : Math.max(sch.start+1, wall)) : Math.max(0,wall)));
-    c.doneStart=sch?Math.round(sch.start):null;   // старт по плану — для факт-хронометража
+    c.doneEnd=Math.max(0, Math.round(wasRunning ? Math.max((c.opStart||0)+5, wall) : (sch ? (wall>=sch.end ? sch.end : Math.max(sch.start+1, wall)) : Math.max(0,wall))));
+    c.doneStart=wasRunning ? Math.round(c.opStart||0) : (sch?Math.round(sch.start):null);   // факт-старт точнее планового
+    c.opStart=null;
     if(sch) c.tower=sch.tower;
   }
   manualOps=null; saveSettings(); render();
@@ -1133,10 +1157,10 @@ function renderCards(s, sched){
     cardsRenderedSig=sig;
     let pos=0;
     host.innerHTML=cards.map(c=>{
-      const done=c.status==='done'; const p=done?0:(++pos);
+      const done=c.status==='done', running=c.status==='op'; const p=(done||running)?0:(++pos);
       const typeSel=`<select class="blk ctype" onchange="cardSet('${c.id}','type',this.value);render()"${done?' disabled':''}>${TYPES.map(t=>`<option value="${t}"${c.type===t?' selected':''}>${OPS[t].label}</option>`).join('')}<option value="custom"${c.type==='custom'?' selected':''}>Другое…</option></select>`;
       const custom=c.type==='custom'?`<input type="text" class="cname clbl" placeholder="Название" value="${escHtml(c.label)}" oninput="cardSet('${c.id}','label',this.value)"><select class="blk" onchange="cardSet('${c.id}','joint',this.value);render()"${done?' disabled':''}>${Object.keys(JOINTS).map(j=>`<option value="${j}"${((c.joint&&JOINTS[c.joint])?c.joint:'knee')===j?' selected':''}>${JOINTS[j].label}</option>`).join('')}</select><input type="number" class="cdur" min="5" step="5" value="${c.dur||45}" title="длительность, мин" oninput="cardSet('${c.id}','dur',this.value)">`:'';
-      const ord=done?'<span class="cnum">✓</span>':`<select class="dnord" title="номер в очереди" onchange="cardMove('${c.id}',this.value)">${Array.from({length:nPlan},(_,n)=>`<option value="${n+1}"${n+1===p?' selected':''}>${n+1}</option>`).join('')}</select><span class="mvbtns"><button onclick="cardShift('${c.id}',-1)" title="раньше">▲</button><button onclick="cardShift('${c.id}',1)" title="позже">▼</button></span>`;
+      const ord=done?'<span class="cnum">✓</span>':running?'<span class="cnum" style="color:var(--warn)">▶</span>':`<select class="dnord" title="номер в очереди" onchange="cardMove('${c.id}',this.value)">${Array.from({length:nPlan},(_,n)=>`<option value="${n+1}"${n+1===p?' selected':''}>${n+1}</option>`).join('')}</select><span class="mvbtns"><button onclick="cardShift('${c.id}',-1)" title="раньше">▲</button><button onclick="cardShift('${c.id}',1)" title="позже">▼</button></span>`;
       const ni=(c.implants||[]).reduce((a,x)=>a+(+x.q||0),0);
       const impl=done?`<button class="implbtn${ni?' has':''}" onclick="openImplants('${c.id}')" title="списать импланты">${ni?'имп. '+ni:'+ имп.'}</button>`:'';
       return `<div class="caserow crow${done?' cdone':''}" data-id="${c.id}">${ord}<span class="dot" style="background:${cardColor(c)}"></span>${typeSel}${custom}`
@@ -1149,6 +1173,7 @@ function renderCards(s, sched){
   }
   cards.forEach(c=>{ const el=$('cfit-'+c.id); if(!el) return;
     if(c.status==='done'){ el.innerHTML=`<button class="pill ok pillbtn" onclick="openPast('${c.id}')" title="поправить время/стол">до ${minToClock(c.doneEnd||0)} · стол ${(c.tower||0)+1} ✎</button>`; return; }
+    if(c.status==='op'){ el.innerHTML=`<span class="pill warn">идёт с ${minToClock(c.opStart||0)} · стол ${(c.tower||0)+1}</span>`; return; }
     const o=byCard.get(c);
     el.innerHTML=o?`<span class="pill ok">${fmtTime(o.start)} · стол ${o.tower+1}</span>`:'<span class="pill bad">не влезает</span>';
   });
@@ -1591,7 +1616,7 @@ const implLine=x=>`${x.n}${x.size?' '+x.size:''}${x.m?' ('+x.m+')':''} × ${x.q}
 // срез: списание имплантов за день (для старшей м/с)
 function sliceImpl(){
   const dl=doneLogView();
-  const rows=dl.slice().sort((a,b)=>a.end-b.end).filter(d=>(d.implants&&d.implants.length)||(d.photos&&d.photos.length)||d.pat);
+  const rows=dl.slice().sort((a,b)=>a.end-b.end).filter(d=>!d.run && ((d.implants&&d.implants.length)||(d.photos&&d.photos.length)||d.pat));
   const tot={};
   dl.forEach(d=>(d.implants||[]).forEach(x=>{ const k=`${x.n}${x.size?' '+x.size:''}${x.m?' ('+x.m+')':''}`; tot[k]=(tot[k]||0)+(+x.q||0); }));
   let out='Списание имплантов за день\n\n';
@@ -2304,10 +2329,18 @@ function renderLive(){
   let ht='';
   for(let t=0;t<N;t++){
     const onT=p.sched.filter(o=>o.tower===t).sort((a,b)=>a.start-b.start);
-    const cur=onT.find(o=>wall>=o.start && wall<o.end && !isDone(o));
+    const runC=runningCards().find(c=>(c.tower||0)===t);
+    const cur=runC?null:onT.find(o=>wall>=o.start && wall<o.end && !isDone(o));
     const next=onT.find(o=>o.start>=wall || (cur&&o.start>=cur.end));
     let body='';
-    if(cur){
+    if(runC){
+      const dur=(runC.dur>0?+runC.dur:durOfType(runC.type)); const left=Math.max(0,Math.round((runC.opStart||0)+dur-wall));
+      const pct=Math.min(100,Math.round(Math.max(0,wall-(runC.opStart||0))/Math.max(1,dur)*100));
+      body+=`<div class="ltnow"><span class="dot" style="background:${cardColor(runC)};width:14px;height:14px"></span> ▶ ${escHtml(runC.name||cardLabel(runC))}</div>`
+        +`<div class="ltsub">идёт с ${minToClock(runC.opStart||0)} · осталось ~${left} мин</div>`
+        +`<div class="ltbar"><span style="width:${pct}%"></span></div>`
+        +`<div class="ltbtns"><button class="btn primary" onclick="closeLive();toggleCardDone('${runC.id}',true)">✓ Выполнена + импланты</button><button class="btn" onclick="toggleCardDone('${runC.id}',false)">✓ Выполнена</button></div>`;
+    } else if(cur){
       const i=liveSched.indexOf(cur), left=Math.max(0,Math.round(cur.end-wall));
       const pct=Math.min(100,Math.round((wall-cur.start)/(cur.end-cur.start)*100));
       body+=`<div class="ltnow"><span class="dot" style="background:${opColor(cur)};width:14px;height:14px"></span> ${escHtml(nm(cur))}${cur._name?` <span class="muted">· ${escHtml(opLabel(cur))}</span>`:''}</div>`
@@ -2315,6 +2348,8 @@ function renderLive(){
         +`<div class="ltbar"><span style="width:${pct}%"></span></div>`
         +`<div class="ltbtns"><button class="btn primary" onclick="liveDone(${i},true)">✓ Выполнена + импланты</button><button class="btn" onclick="liveDone(${i},false)">✓ Выполнена</button></div>`;
     } else body+=`<div class="ltfree">свободен</div>`;
+    if(!runC && next && next._card && next._card.status==='plan' && next.start<=wall+30)
+      body+=`<div class="ltbtns"><button class="btn" onclick="cardStart('${next._card.id}')">▶ Начали: ${escHtml(next._card.name||opLabel(next))}</button></div>`;
     if(next && next!==cur) body+=`<div class="ltnext">далее <b>${fmtTime(next.start)}</b> — ${escHtml(nm(next))} <span class="muted">(${escHtml(opLabel(next))})</span></div>`;
     else if(!cur && !next) body+=`<div class="ltsub">на сегодня всё</div>`;
     ht+=`<div class="ltcard"><div class="ltt">Стол ${t+1}</div>${body}</div>`;
@@ -2364,6 +2399,15 @@ function markDoneFromPlan(withImpl){
   closeOpMenu(); if(!o) return;
   markDoneOp(o, withImpl);
 }
+function markStartFromPlan(){
+  const host=$('opMenu'); const o=host&&lastDrawSched.find(x=>x._mid===host._mid);
+  closeOpMenu(); if(!o||!o._card) return;
+  cardStart(o._card.id);
+}
+function openRunMenu(id){
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  if(confirm((c.name||cardLabel(c))+' — операция идёт с '+minToClock(c.opStart||0)+'.\nЗавершить и списать импланты?')) toggleCardDone(id, true);
+}
 function markDoneOp(o, withImpl){
   const c=o&&(o._card||null); if(!c) return;
   toggleCardDone(c.id, !!withImpl);   // карточка станет «выполнена»; импланты откроются там же, в «Операциях дня»
@@ -2375,6 +2419,7 @@ function setupGanttDrag(){
   g.addEventListener('pointerdown', e=>{
     if(e.pointerType==='mouse' && e.button!==0) return;
     const op=e.target.closest('.op');
+    if(op && op.getAttribute('data-runid')!=null){ drag={runid:op.getAttribute('data-runid'), x:e.clientX, y:e.clientY}; return; }
     if(op && op.getAttribute('data-doneid')!=null){ drag={doneid:op.getAttribute('data-doneid'), x:e.clientX, y:e.clientY}; return; }
     if(op && op.getAttribute('data-mid')!=null){ drag={mid:op.getAttribute('data-mid'), x:e.clientX, y:e.clientY}; return; }
     // пустое место дорожки: запомнить стол и время под пальцем — «внести выполненную сюда»
@@ -2392,7 +2437,8 @@ function setupGanttDrag(){
     const d=drag, moved=Math.abs(e.clientX-d.x)>8||Math.abs(e.clientY-d.y)>8;
     drag=null;
     if(moved) return;
-    if(d.doneid!=null) openPast(d.doneid);
+    if(d.runid!=null) openRunMenu(d.runid);
+    else if(d.doneid!=null) openPast(d.doneid);
     else if(d.mid!=null) openOpMenu(d.mid);
     else if(d.laneTap!=null) openPast(null, d.laneTap, d.tapMin);
   });
@@ -2426,7 +2472,8 @@ function drawGantt(s, sched, manual, conf){
     (s.doneLog||[]).filter(d=>d.tower===lane).forEach(d=>{
       const ddur=s.dur[d.type]||0, dst=Math.max(0,d.end-ddur);
       const dcol=OPS[d.type]?OPS[d.type].color:'#888', dlbl=OPS[d.type]?OPS[d.type].label:(d.lbl||d.type);
-      ops+=`<div class="op donep" data-doneid="${d.id}" style="left:${dst/day*100}%;width:${ddur/day*100}%;background:${dcol}" title="Выполнена: ${escHtml(d.pat||'')} ${dlbl} ${fmtTime(dst)}–${fmtTime(d.end)} — нажмите, чтобы поправить время/стол">✓ ${d.pat?escHtml(d.pat):dlbl}</div>`;
+      if(d.run) ops+=`<div class="op oprun" data-runid="${d.id}" style="left:${dst/day*100}%;width:${ddur/day*100}%;background:${dcol}" title="Идёт: ${escHtml(d.pat||'')} ${dlbl} с ${fmtTime(dst)} — нажмите, чтобы завершить">▶ ${d.pat?escHtml(d.pat):dlbl}</div>`;
+      else ops+=`<div class="op donep" data-doneid="${d.id}" style="left:${dst/day*100}%;width:${ddur/day*100}%;background:${dcol}" title="Выполнена: ${escHtml(d.pat||'')} ${dlbl} ${fmtTime(dst)}–${fmtTime(d.end)} — нажмите, чтобы поправить время/стол">✓ ${d.pat?escHtml(d.pat):dlbl}</div>`;
     });
     (blk[lane]||[]).forEach(iv=>{
       const bl=iv[0]/day*100, bw=(iv[1]-iv[0])/day*100;
