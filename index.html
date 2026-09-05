@@ -298,6 +298,26 @@
     .op{height:38px;top:2px;font-size:12.5px} .anesb{height:38px;top:2px}
     .blockb,.offwin,.pastb,.nowline{height:42px}
   }
+  .op.opnow{box-shadow:0 0 0 3px rgba(162,60,40,.55), inset 0 0 0 1px rgba(255,255,255,.35)}
+  .gapchip{position:absolute;top:8px;height:22px;border-radius:99px;background:rgba(192,122,20,.14);border:1px dashed var(--warn);color:#8a5807;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1;overflow:hidden;white-space:nowrap}
+  .gapchip:hover{background:rgba(192,122,20,.28)}
+  .viewsw{margin-left:auto;display:inline-flex;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px}
+  .viewsw button{border:none;background:none;border-radius:7px;padding:5px 11px;font-size:12.5px;color:var(--muted);cursor:pointer;font-weight:600}
+  .viewsw button.on{background:var(--accent);color:#fff}
+  .chron{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+  .chrow{display:flex;align-items:stretch;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 11px;cursor:pointer}
+  .chrow .cht{flex:0 0 48px;display:flex;flex-direction:column;justify-content:center;font-variant-numeric:tabular-nums;line-height:1.25}
+  .chrow .cht b{font-size:15px} .chrow .cht span{font-size:12px;color:var(--muted)}
+  .chrow .chbar{flex:0 0 5px;border-radius:99px}
+  .chrow .chmain{flex:1;min-width:0}
+  .chrow .chname{font-size:15.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chrow .chmeta{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .chrow.st-done{opacity:.6} .chrow.st-done .chname{text-decoration:line-through}
+  .chrow.st-run{border-color:var(--warn);box-shadow:0 0 0 2px rgba(192,122,20,.25)}
+  .chrow.st-now{border-color:var(--accent);background:#fff}
+  .chnow{display:flex;align-items:center;gap:10px;margin:4px 0;color:var(--accent);font-size:12.5px;font-weight:700}
+  .chnow::before,.chnow::after{content:"";flex:1;height:2px;background:var(--accent);border-radius:2px}
+  .chgap{text-align:center;font-size:12px;color:#8a5807;background:rgba(192,122,20,.1);border:1px dashed var(--warn);border-radius:99px;padding:4px 10px;margin:0 auto}
   .op.oprun{box-shadow:0 0 0 2px var(--warn), inset 0 0 0 1px rgba(255,255,255,.35);font-weight:700}
   .nowline{position:absolute;top:0;height:30px;width:3px;border-radius:2px;background:var(--accent);z-index:6;box-shadow:0 0 6px var(--accent)}
   .axis .nowtick{color:var(--accent);font-weight:700}
@@ -692,13 +712,14 @@
 
   <!-- РАСПИСАНИЕ: главный визуал -->
   <div class="card schedCard" data-tab="day">
-    <h2>Расписание дня</h2>
+    <h2>Расписание дня <span class="viewsw noprint"><button id="vwGantt" onclick="setSchedView('gantt')">Лента</button><button id="vwChron" onclick="setSchedView('chron')">Хроника</button></span></h2>
     <div id="schedMode"></div>
     <div class="gantt" id="gantt"></div>
+    <div class="chron" id="chron" style="display:none"></div>
     <div class="legend" id="legend"></div>
     <div class="lanesum" id="laneSummary"></div>
     <details><summary>Как читать диаграмму</summary>
-      <div class="note">Штриховка в начале блока = анестезия на столе (стол занят: ПКС — спинальная, мениск — в/в). Значок <b>∥</b> на блоке = анестезия шла параллельно в отдельном зале, стол ею не занят (плечевые: Латарже, Банкарт, манжета). После операции набор, оптика и шейвер уходят на стерилизацию 1,5 ч. Тёмная косая штриховка по краям дорожки = стол ещё/уже не работает. Линия и метка «сейчас» появляются в режиме остатка дня.</div>
+      <div class="note">Штриховка в начале блока = анестезия на столе (стол занят: ПКС — спинальная, мениск — в/в). Значок <b>∥</b> на блоке = анестезия шла параллельно в отдельном зале, стол ею не занят (плечевые: Латарже, Банкарт, манжета). После операции набор, оптика и шейвер уходят на стерилизацию 1,5 ч. Тёмная косая штриховка по краям дорожки = стол ещё/уже не работает. Красная линия и рамка — «сейчас» и текущая операция. Пунктирные чипы «+N» — паузы между операциями: тап — отметить перерыв с причиной. Кнопка «Хроника» — то же расписание вертикальным списком, удобно на телефоне.</div>
     </details>
   </div>
 
@@ -1482,6 +1503,44 @@ function pastToPlan(){
   cardsRenderedSig=null; saveSettings(); render(); closePast();
 }
 
+/* ---------- вид расписания: Лента (гантт) / Хроника (вертикально, как календарь) ---------- */
+let schedView=(function(){ try{ return localStorage.getItem('arthroSchedView')||(window.innerWidth<700?'chron':'gantt'); }catch(e){ return 'gantt'; } })();
+function setSchedView(v){ schedView=v; try{ localStorage.setItem('arthroSchedView',v); }catch(e){} render(); }
+function renderChron(s, drawSched){
+  const host=$('chron'); if(!host) return;
+  const isChron=schedView==='chron';
+  ['gantt','legend','laneSummary'].forEach(id=>{ const el=$(id); if(el) el.style.display=isChron?'none':''; });
+  host.style.display=isChron?'':'none';
+  const b1=$('vwGantt'), b2=$('vwChron'); if(b1) b1.classList.toggle('on',!isChron); if(b2) b2.classList.toggle('on',isChron);
+  if(!isChron) return;
+  const N=stationCount(s), now=(s.wallNow!=null?s.wallNow:-1);
+  const items=[];
+  drawSched.forEach(o=>items.push({kind:'plan', id:o._mid, start:o.start, end:o.end, tower:o.tower, color:opColor(o), name:o._name||'', label:opLabel(o), card:o._card||null, pinned:!!o.pinned, par:o.anesMode==='par', anesStart:o.anesStart}));
+  (s.doneLog||[]).forEach(d=>{ const st=Math.max(0,d.start!=null?d.start:(d.end-(s.dur[d.type]||45))); const c=cards.find(x=>x.id===d.id);
+    items.push({kind:d.run?'run':'done', id:d.id, start:st, end:d.end, tower:d.tower||0, color:(OPS[d.type]?OPS[d.type].color:'#8a7f72'), name:d.pat||'', label:(OPS[d.type]?OPS[d.type].label:(d.lbl||'Операция')), card:c||null, pinned:false}); });
+  items.sort((a,b)=>a.start-b.start||a.tower-b.tower);
+  let html='', nowShown=!(now>0&&now<=s.day), prevEnd=null;
+  items.forEach((it,i)=>{
+    if(!nowShown && it.start>now){ html+=`<div class="chnow"><span>сейчас ${fmtTime(now)}</span></div>`; nowShown=true; }
+    if(N===1 && prevEnd!=null && it.start-prevEnd>=10) html+=`<div class="chgap">⏸ пауза ${Math.round(it.start-prevEnd)} мин</div>`;
+    const c=it.card; const ni=c?(c.implants||[]).reduce((a,x)=>a+(+x.q||0),0):0;
+    const flags=[it.pinned?'📌':'', (c&&c.exam&&c.exam.trim())?'📝':'', ni?('имп. '+ni):'', (c&&(c.photos||[]).length)?'📷':''].filter(Boolean).join(' · ');
+    const isNow=(now>=it.start && now<it.end)||it.kind==='run';
+    const status=it.kind==='done'?'✓ выполнена':it.kind==='run'?'▶ идёт':'';
+    const onclick=it.kind==='plan'?`openOpMenu('${it.id}')`:it.kind==='done'?`openPast('${it.id}')`:`openRunMenu('${it.id}')`;
+    html+=`<div class="chrow st-${it.kind}${isNow?' st-now':''}" onclick="${onclick}">
+      <div class="cht"><b>${fmtTime(it.start)}</b><span>${fmtTime(it.end)}</span></div>
+      <div class="chbar" style="background:${it.color}"></div>
+      <div class="chmain"><div class="chname">${escHtml(it.name||it.label)}${it.name?` <span class="muted">· ${escHtml(it.label)}</span>`:''}</div>
+        <div class="chmeta">стол ${it.tower+1} · ${Math.round(it.end-it.start)} мин${it.kind==='plan'&&!it.par?' · анестезия на столе':''}${status?' · <b>'+status+'</b>':''}${flags?' · '+flags:''}</div></div>
+    </div>`;
+    prevEnd=Math.max(prevEnd==null?it.end:prevEnd, it.end);
+  });
+  if(!items.length) html='<div class="note">Операций пока нет — добавьте в «Операциях дня» или через «Быстрый план».</div>';
+  else if(!nowShown && now>s.day) html+=`<div class="chnow"><span>день окончен · сейчас ${fmtTime(now)}</span></div>`;
+  host.innerHTML=html;
+}
+
 /* ---------- закрепление времени плановой операции (📌) ---------- */
 let pinCardId=null;
 function openPin(cardId){
@@ -2217,7 +2276,7 @@ function simulate(s, order){
       if(ss) sets[ss.cat][ss.idx]=Math.max(sets[ss.cat][ss.idx], end+s.ster);
       if(si>=0) shavers[si]=Math.max(shavers[si], end+s.ster);
       if(sgi>=0) surgeons[sgi].t=Math.max(surgeons[sgi].t, end);
-      stations[tower]=Math.max(stations[tower], end+(s.turnover||0));
+      // стол НЕ «занимаем с конца» (иначе окно ДО закреплённой пропадает) — только её интервал как блокировку
       blk[tower]=blk[tower]||[]; blk[tower].push([Math.max(0,occS), end+(s.turnover||0)]);
       sched.push({type:sp.type,skillType:sp.skillType,label:sp.label,color:sp.color,sets:sp.sets,shaver:sp.shaver,dur,anes:sp.anes,
         tower,start,end,anesStart:start-anes,anesMode:inroom?'room':'par',setCat:ss?ss.cat:sp.sets[0],setIdx:ss?ss.idx:0,surg:sgi>=0?surgeons[sgi].key:null,oidx:pos,pinned:true});
@@ -2472,6 +2531,7 @@ function render(){
   $('schedMode').innerHTML = `<span class="muted">Тап по операции — меню (начали / выполнена / импланты). <b>Удерживайте и тяните</b> — перенести на другое время или стол. Тап по пустому месту — внести задним числом или перерыв.</span>`;
   lastDrawSched=drawSched;   // для тап-меню операции на ленте
   drawGantt(s, drawSched, false, {});
+  renderChron(s, drawSched);
   if(curSliceRole && $('sliceActions') && $('sliceActions').style.display==='flex') showSlice(curSliceRole);   // обновить показанный срез под текущий план
   drawCeilings(s);
   renderSter();
@@ -2653,7 +2713,13 @@ function setupGanttDrag(){
     }
     const bb=e.target.closest('.blockb');
     if(bb){ drag={blkid:bb.getAttribute('data-blkid'), x:e.clientX, y:e.clientY}; return; }
+    const gc=e.target.closest('.gapchip');
     const track=e.target.closest('.track');
+    if(gc && track){
+      const lanes=[...document.querySelectorAll('#gantt .lane .track')];
+      drag={gapLane:lanes.indexOf(track), gs:+gc.getAttribute('data-gs'), ge:+gc.getAttribute('data-ge'), x:e.clientX, y:e.clientY};
+      return;
+    }
     if(track){
       const lanes=[...document.querySelectorAll('#gantt .lane .track')];
       const lane=lanes.indexOf(track);
@@ -2683,6 +2749,7 @@ function setupGanttDrag(){
     drag=null;
     if(moved) return;
     if(d.blkid!=null) openBreakEdit(d.blkid);
+    else if(d.gapLane!=null){ openPast(null, d.gapLane, d.gs); setPastMode('break'); $('br_from').value=minToClock(d.gs); $('br_to').value=minToClock(d.ge); $('pastTitle').textContent='Пауза '+Math.round(d.ge-d.gs)+' мин — что случилось?'; }
     else if(d.laneTap!=null) openPast(null, d.laneTap, d.tapMin);
   });
   window.addEventListener('pointercancel', ()=>{ clear(); });
@@ -2702,7 +2769,8 @@ function drawGantt(s, sched, manual, conf){
   lastGanttDay=day;   // фактический масштаб ленты — для пересчёта пикселей во время при перетаскивании
   let axis='<div class="axis">';
   for(let m=0;m<=day;m+=60) axis+=`<span class="tick" style="left:${m/day*100}%">${fmtTime(m)}</span>`;
-  if(s.useDoneLog && s.nowFloor>0 && s.nowFloor<=day) axis+=`<span class="tick nowtick" style="left:${s.nowFloor/day*100}%">▼${fmtTime(s.nowFloor)}</span>`;
+  const nowM=(s.wallNow!=null?s.wallNow:-1);
+  if(nowM>0 && nowM<=day) axis+=`<span class="tick nowtick" style="left:${nowM/day*100}%">▼${fmtTime(nowM)}</span>`;
   axis+='</div>';
   const blk=blocksByStation(s.blocks, lanes, day);
   let body='';
@@ -2740,9 +2808,21 @@ function drawGantt(s, sched, manual, conf){
       const cft='';
       const oplabel=(o.pinned?'📌 ':'')+escHtml(o._name?o._name:opLabel(o));
       const optitle=escHtml((o._name?o._name+' · ':'')+opLabel(o));
-      ops+=`<div class="op${par?' parop':''}${cflict}"${mid} style="left:${left}%;width:${w}%;background:${opColor(o)}" title="${optitle} ${fmtTime(o.start)}–${fmtTime(o.end)}${atitle}${cft}">${oplabel}</div>`;
+      const isNow=(nowM>=o.start && nowM<o.end)?' opnow':'';
+      ops+=`<div class="op${par?' parop':''}${cflict}${isNow}"${mid} style="left:${left}%;width:${w}%;background:${opColor(o)}" title="${optitle} ${fmtTime(o.start)}–${fmtTime(o.end)}${atitle}${cft}">${oplabel}</div>`;
     });
-    if(s.useDoneLog && s.nowFloor>0 && s.nowFloor<day) ops+=`<div class="nowline" style="left:${s.nowFloor/day*100}%" title="Сейчас ${fmtTime(s.nowFloor)}"></div>`;
+    // паузы между операциями на этом столе (план + выполненные/идущие): чип «+N мин», тап = внести перерыв
+    {
+      const items=sched.filter(o=>o.tower===lane).map(o=>({s:(o.anesMode==='par'?o.start:Math.max(0,o.anesStart!=null?o.anesStart:o.start)), e:o.end}))
+        .concat((s.doneLog||[]).filter(d=>d.tower===lane).map(d=>({s:Math.max(0,d.start!=null?d.start:(d.end-(s.dur[d.type]||45))), e:d.end})))
+        .sort((a,b)=>a.s-b.s);
+      for(let i=1;i<items.length;i++){
+        const gapS=items[i-1].e, gapE=items[i].s, gap=gapE-gapS;
+        if(gap>=10 && !(s.blocks||[]).some(b=>(b.station==='all'||b.station===lane)&&b.from<gapE&&b.to>gapS))
+          ops+=`<div class="gapchip" data-gs="${gapS}" data-ge="${gapE}" style="left:${gapS/day*100}%;width:${gap/day*100}%" title="Пауза ${gap} мин — нажмите, чтобы отметить перерыв с причиной">+${Math.round(gap)}</div>`;
+      }
+    }
+    if(nowM>0 && nowM<day) ops+=`<div class="nowline" style="left:${nowM/day*100}%" title="Сейчас ${fmtTime(nowM)}"></div>`;
     body+=`<div class="lane"><div class="name">Стол ${lane+1}</div><div class="track">${ops}</div></div>`;
   }
   g.innerHTML=axis+body;
