@@ -590,16 +590,17 @@
   <div class="wizcard" style="max-width:400px">
     <div class="wizhead"><b id="pinTitle">Время вручную</b><button class="x implhead-x" onclick="closePin()" style="border:none;width:26px;height:26px;border-radius:7px;background:var(--line);cursor:pointer;font-size:14px">×</button></div>
     <div class="blkrow" style="margin-top:6px">
-      <span class="sep">начало в</span><input type="time" id="pin_start" step="300">
+      <span class="sep">начало</span><input type="time" id="pin_start" step="300">
+      <span class="sep">конец</span><input type="time" id="pin_end" step="300">
       <select class="blk" id="pin_tower"></select>
     </div>
-    <div class="blkrow" id="pinSteps" style="margin-top:6px">
-    </div>
+    <div class="blkrow" style="margin-top:6px"><span class="sep">начало</span><span id="pinSteps"></span></div>
+    <div class="blkrow" style="margin-top:4px"><span class="sep">конец</span><span id="pinEndSteps"></span> <span class="pill" id="pinDurPill"></span></div>
     <div class="btnrow" style="margin-top:14px">
       <button class="btn primary" onclick="savePin()">📌 Закрепить</button>
       <button class="btn" id="pinOffBtn" onclick="unpin()" style="display:none">Открепить (снова авто)</button>
     </div>
-    <div class="note" style="margin-top:10px">Операция встанет ровно на это время и стол; конец = начало + её длительность. Остальной план обтечёт её автоматически.</div>
+    <div class="note" style="margin-top:10px">Операция встанет ровно на это время и стол. Конец задаёт её плановую длительность (можно вписать или сдвинуть кнопками). Остальной план обтечёт её автоматически.</div>
   </div>
 </div>
 
@@ -1542,7 +1543,10 @@ function renderChron(s, drawSched){
 }
 
 /* ---------- закрепление времени плановой операции (📌) ---------- */
-let pinCardId=null;
+let pinCardId=null, pinDur=45;
+function pinDurShow(){ const a=clockToMin($('pin_start').value), b=clockToMin($('pin_end').value); const d=(isFinite(a)&&isFinite(b))?b-a:NaN; const el=$('pinDurPill'); el.textContent=isFinite(d)?(d>=5?d+' мин':'конец раньше начала'):''; el.className='pill '+(d>=5?'':'bad'); }
+function pinStartChanged(){ const a=clockToMin($('pin_start').value); if(isFinite(a)) $('pin_end').value=minToClock(Math.min(16*60,a+pinDur)); pinDurShow(); }
+function pinEndChanged(){ const a=clockToMin($('pin_start').value), b=clockToMin($('pin_end').value); if(isFinite(a)&&isFinite(b)&&b-a>=5) pinDur=b-a; pinDurShow(); }
 function openPin(cardId){
   const c=cards.find(x=>x.id===cardId); if(!c||c.status!=='plan') return;
   pinCardId=cardId;
@@ -1550,7 +1554,9 @@ function openPin(cardId){
   const sch=(lastPlanSched||[]).find(o=>o._card===c);
   $('pinTitle').textContent='📌 '+(c.name||cardLabel(c));
   const wsel=$('pin_tower'); let wo=''; for(let i=0;i<N;i++) wo+=`<option value="${i}">Стол ${i+1}</option>`; wsel.innerHTML=wo;
-  $('pin_start').value=minToClock(c.pinStart!=null?c.pinStart:(sch?sch.start:0));
+  const st=c.pinStart!=null?c.pinStart:(sch?sch.start:0);
+  pinDur=(c.dur>0?+c.dur:(sch?(sch.end-sch.start):(s.dur[c.type]||45)));
+  $('pin_start').value=minToClock(st); $('pin_end').value=minToClock(st+pinDur); pinDurShow();
   wsel.value=String(Math.max(0,Math.min(N-1, c.pinTower!=null?c.pinTower:(sch?sch.tower:0))));
   $('pinOffBtn').style.display=c.pinStart!=null?'':'none';
   $('pinSheet').style.display='flex';
@@ -1560,8 +1566,9 @@ function tstep(id){ return `<span class="tstep"><button onclick="bumpTime('${id}
 function closePin(){ $('pinSheet').style.display='none'; pinCardId=null; }
 function savePin(){
   const c=cards.find(x=>x.id===pinCardId); if(!c) return;
-  const t=clockToMin($('pin_start').value);
+  const t=clockToMin($('pin_start').value), e=clockToMin($('pin_end').value);
   if(!isFinite(t)){ $('pin_start').focus(); return; }
+  if(isFinite(e)){ if(e-t<5){ $('pin_end').focus(); pinDurShow(); return; } c.dur=Math.round(e-t); }
   c.pinStart=Math.max(0,Math.round(t));
   c.pinTower=Math.max(0,Math.round(+$('pin_tower').value||0));
   cardsRenderedSig=null; manualOps=null; saveSettings(); render(); closePin();
@@ -3020,7 +3027,8 @@ loadSettings();
   if(dayStore[curDay]) applyDay(dayStore[curDay]);   // данные открытого дня — из недельного хранилища
   if(curDay!==t) gotoDay(t);                          // ушедший день уезжает в историю, открываем сегодняшний
 })();
-['pinSteps:pin_start','pastStartSteps:past_start','pastEndSteps:past_end','brFromSteps:br_from','brToSteps:br_to'].forEach(pair=>{ const [host,id]=pair.split(':'); const el=$(host); if(el) el.innerHTML=tstep(id); });
+['pinSteps:pin_start','pinEndSteps:pin_end','pastStartSteps:past_start','pastEndSteps:past_end','brFromSteps:br_from','brToSteps:br_to'].forEach(pair=>{ const [host,id]=pair.split(':'); const el=$(host); if(el) el.innerHTML=tstep(id); });
+$('pin_start').addEventListener('change',pinStartChanged); $('pin_end').addEventListener('change',pinEndChanged);
 renderPresets();
 render();
 setupGanttDrag();
