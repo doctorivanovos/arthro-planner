@@ -317,7 +317,8 @@
   .chrow.st-now{border-color:var(--accent);background:#fff}
   .chnow{display:flex;align-items:center;gap:10px;margin:4px 0;color:var(--accent);font-size:12.5px;font-weight:700}
   .chnow::before,.chnow::after{content:"";flex:1;height:2px;background:var(--accent);border-radius:2px}
-  .chgap{text-align:center;font-size:12px;color:#8a5807;background:rgba(192,122,20,.1);border:1px dashed var(--warn);border-radius:99px;padding:4px 10px;margin:0 auto}
+  .chrow.st-break{opacity:.85}.chbar-brk{background:repeating-linear-gradient(135deg,#c9b8a8 0 4px,transparent 4px 8px)!important}
+.chgap{text-align:center;font-size:12px;color:#8a5807;background:rgba(192,122,20,.1);border:1px dashed var(--warn);border-radius:99px;padding:4px 10px;margin:0 auto}
   .op.oprun{box-shadow:0 0 0 2px var(--warn), inset 0 0 0 1px rgba(255,255,255,.35);font-weight:700}
   .nowline{position:absolute;top:0;height:30px;width:3px;border-radius:2px;background:var(--accent);z-index:6;box-shadow:0 0 6px var(--accent)}
   .axis .nowtick{color:var(--accent);font-weight:700}
@@ -1519,11 +1520,14 @@ function renderChron(s, drawSched){
   drawSched.forEach(o=>items.push({kind:'plan', id:o._mid, start:o.start, end:o.end, tower:o.tower, color:opColor(o), name:o._name||'', label:opLabel(o), card:o._card||null, pinned:!!o.pinned, par:o.anesMode==='par', anesStart:o.anesStart}));
   (s.doneLog||[]).forEach(d=>{ const st=Math.max(0,d.start!=null?d.start:(d.end-(s.dur[d.type]||45))); const c=cards.find(x=>x.id===d.id);
     items.push({kind:d.run?'run':'done', id:d.id, start:st, end:d.end, tower:d.tower||0, color:(OPS[d.type]?OPS[d.type].color:'#8a7f72'), name:d.pat||'', label:(OPS[d.type]?OPS[d.type].label:(d.lbl||'Операция')), card:c||null, pinned:false}); });
+  // перерывы с причиной (внесённые вручную) — тоже строки хроники
+  (s.blocks||[]).forEach(b=>{ if(!b.id) return; items.push({kind:'break', id:b.id, start:b.from, end:b.to, tower:b.station==='all'?-1:(+b.station||0), color:'transparent', name:b.note||'', label:'перерыв', card:null, pinned:false}); });
   items.sort((a,b)=>a.start-b.start||a.tower-b.tower);
   let html='', nowShown=!(now>0&&now<=s.day), prevEnd=null;
   items.forEach((it,i)=>{
     if(!nowShown && it.start>now){ html+=`<div class="chnow"><span>сейчас ${fmtTime(now)}</span></div>`; nowShown=true; }
     if(N===1 && prevEnd!=null && it.start-prevEnd>=10) html+=`<div class="chgap">⏸ пауза ${Math.round(it.start-prevEnd)} мин</div>`;
+    if(it.kind==='break'){ html+=`<div class="chrow st-break" onclick="openBreakEdit('${it.id}')"><div class="cht"><b>${fmtTime(it.start)}</b><span>${fmtTime(it.end)}</span></div><div class="chbar chbar-brk"></div><div class="chmain"><div class="chname">⏸ ${escHtml(it.name||'Перерыв')}</div><div class="chmeta">${it.tower<0?'все столы':'стол '+(it.tower+1)} · ${Math.round(it.end-it.start)} мин</div></div></div>`; prevEnd=Math.max(prevEnd==null?it.end:prevEnd, it.end); return; }
     const c=it.card; const ni=c?(c.implants||[]).reduce((a,x)=>a+(+x.q||0),0):0;
     const flags=[it.pinned?'📌':'', (c&&c.exam&&c.exam.trim())?'📝':'', ni?('имп. '+ni):'', (c&&(c.photos||[]).length)?'📷':''].filter(Boolean).join(' · ');
     const isNow=(now>=it.start && now<it.end)||it.kind==='run';
