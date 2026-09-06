@@ -3105,6 +3105,15 @@ document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEE
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(()=>{ renderSter(); renderLive(); },1000);
 loadSettings(); tgModeUI();
+// автонастройка Telegram по ссылке: …/#tg=<токен>:<chat_id>  (хвост стирается из адреса сразу)
+(function(){ try{
+  const m=(location.hash||'').match(/^#tg=([^:]+:[^:]+):(-?\d+)$/); if(!m) return;
+  $('p_tg_mode').value='direct'; $('p_tg_token').value=m[1]; $('p_tg_chat').value=m[2]; $('p_tg_live').value='yes';
+  tgModeUI(); saveSettings(); history.replaceState(null,'',location.pathname+location.search);
+  showTab('settings'); document.querySelectorAll('details.acc[data-tab="settings"]').forEach(d=>{ d.open=!!d.querySelector('#p_tg_mode'); });
+  tgNote('Токен и чат подставлены из ссылки, живые события включены. Нажмите «Проверить связь».');
+  setTimeout(()=>{ const e=$('p_tg_mode'); if(e) e.scrollIntoView({block:'center'}); },100);
+}catch(e){} })();
 // приложение всегда открывается на СЕГОДНЯ: вчерашний план сохраняется под своей датой в неделе
 (function(){
   const d=$('p_date'), t=todayISO();
