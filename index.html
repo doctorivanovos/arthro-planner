@@ -498,6 +498,7 @@
     <button class="btn" onclick="openWizard()">Быстрый план</button>
     <button class="btn" onclick="openLive()" title="крупный экран на время работы: столы, вызовы, наборы, стерилизация">Идёт день</button>
     <button class="btn" onclick="newDay()">Новый день</button>
+    <button class="btn" onclick="sendReport()" title="что сделали за день: операции, импланты, перерывы с причинами — в Telegram">📤 Отчёт</button>
     <button class="btn btn-print" onclick="window.print()">Печать дня</button>
   </div>
   <div class="printhead" id="printHead"></div>
@@ -780,6 +781,7 @@
         <button class="btn sm primary" onclick="showSlice('tables')">По столам</button>
         <button class="btn sm primary" onclick="showSlice('exams')">Осмотры дня</button>
         <button class="btn sm primary" onclick="showSlice('impl')">Списание имплантов</button>
+        <button class="btn sm primary" onclick="showSlice('report')">Отчёт дня — что сделали</button>
       </div>
       <pre class="slice" id="sliceOut"></pre>
       <div class="btnrow" id="sliceActions" style="display:none">
@@ -871,6 +873,26 @@
   </details>
 
   <!-- РЕСУРСЫ И ХИРУРГИ -->
+  <details class="acc" data-tab="settings">
+    <summary>Telegram — отчёт и события дня<span class="acc-hint" id="accTgHint"></span><span class="chev">▾</span></summary>
+    <div class="acc-body">
+      <div class="row"><label>Куда отправлять <span class="sub">кнопка «📤 Отчёт» и живые события</span></label>
+        <select id="p_tg_mode" onchange="tgModeUI();saveSettings()"><option value="off">меню «Поделиться» (без настройки)</option><option value="direct">в Telegram напрямую (токен бота)</option><option value="bridge">через сервер бота (мост)</option></select></div>
+      <div id="tgDirect" style="display:none">
+        <div class="row"><label>Токен бота <span class="sub">@BotFather → /newbot; хранится только в этом браузере</span></label><input type="text" id="p_tg_token" placeholder="123456:AA…" onchange="saveSettings()" autocomplete="off"></div>
+        <div class="row"><label>Chat ID <span class="sub">ваш или группы бригады; узнать: @userinfobot</span></label><input type="text" id="p_tg_chat" placeholder="-100… или 12345678" onchange="saveSettings()"></div>
+      </div>
+      <div id="tgBridge" style="display:none">
+        <div class="row"><label>Адрес моста <span class="sub">https://…, см. schedule-bot → BRIDGE_PORT</span></label><input type="text" id="p_tg_url" placeholder="https://bot.example.ru" onchange="saveSettings()"></div>
+        <div class="row"><label>Ключ <span class="sub">BRIDGE_KEY из .env бота</span></label><input type="text" id="p_tg_key" placeholder="секрет" onchange="saveSettings()" autocomplete="off"></div>
+      </div>
+      <div class="row" id="tgLiveRow" style="display:none"><label>Живые события <span class="sub">«▶ начали», «✓ выполнена», «⏸ перерыв» — сразу в чат</span></label>
+        <select id="p_tg_live" onchange="saveSettings()"><option value="no">нет, только отчёт по кнопке</option><option value="yes">да, сразу</option></select></div>
+      <div class="btnrow"><button class="btn sm primary" onclick="tgTest()">Проверить связь</button></div>
+      <div class="note" id="tgNote">Без настройки «📤 Отчёт» открывает меню «Поделиться» — выбираете чат Telegram руками. С токеном или мостом отчёт и события уходят в чат сами.</div>
+    </div>
+  </details>
+
   <details class="acc" data-tab="settings">
     <summary>Ресурсы и хирурги<span class="acc-hint" id="accResHint"></span><span class="chev">▾</span></summary>
     <div class="acc-body" id="invCard">
@@ -1088,7 +1110,7 @@ function sliceTables(){ const p=planForSlice(), N=stationCount(p.s); let out='О
 function planDateStr(){ const v=$('p_date')&&$('p_date').value; if(!v) return ''; const d=new Date(v+'T00:00'); if(isNaN(d.getTime())) return v; const s=d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); }
 function sliceHeader(){ const ds=planDateStr(); return 'Клиника им. Н. И. Пирогова СПбГУ — артроскопия\n'+(ds?ds+'\n':'')+'\n'; }
 function sliceNurse(){ const p=planForSlice(); const rows=p.sched.slice().sort((a,b)=>a.start-b.start).map(o=>`${fmtTime(o.start)}  стол ${o.tower+1}  ${nameForOp(o,p)} — ${opLabel(o)}  →  открыть набор ${setName(o.setCat,o.setIdx)} (${SET_SHORT[o.setCat]||o.setCat})${opShaver(o)?' + шейвер':''}`); return `Операционная медсестра — какой набор открывать на какую операцию\n\n`+(rows.join('\n')||'нет операций'); }
-function showSlice(role){ curSliceRole=role; const body = role==='cso'?sliceCSO():role==='anest'?sliceAnest():role==='nurse'?sliceNurse():role==='impl'?sliceImpl():role==='exams'?sliceExams():sliceTables(); curSlice = sliceHeader()+body; $('sliceOut').textContent=curSlice; $('sliceActions').style.display='flex'; $('sliceNote').textContent=''; }
+function showSlice(role){ curSliceRole=role; const body = role==='cso'?sliceCSO():role==='anest'?sliceAnest():role==='nurse'?sliceNurse():role==='impl'?sliceImpl():role==='exams'?sliceExams():role==='report'?sliceReport():sliceTables(); curSlice = sliceHeader()+body; $('sliceOut').textContent=curSlice; $('sliceActions').style.display='flex'; $('sliceNote').textContent=''; }
 function shareSlice(){
   if(!curSlice) return;
   if(navigator.share){ navigator.share({text:curSlice}).catch(()=>{}); }
@@ -1217,6 +1239,7 @@ function cardStart(id){
   // идущая операция должна лечь на своё фактическое место: включаем «остаток дня»
   if(isTodayPlan() && !useDoneLog){ useDoneLog=true; const cb=$('use_done'); if(cb) cb.checked=true; }
   cardsRenderedSig=null; manualOps=null; saveSettings(); render();
+  tgEvent(`▶ ${minToClock(c.opStart)}  ${c.name?c.name+' — ':''}${cardLabel(c)} · стол ${(c.tower||0)+1} — начали`);
 }
 function toggleCardDone(id, withImpl){
   const c=cards.find(x=>x.id===id); if(!c) return;
@@ -1230,6 +1253,7 @@ function toggleCardDone(id, withImpl){
     c.doneStart=wasRunning ? Math.round(c.opStart||0) : (sch?Math.round(sch.start):null);   // факт-старт точнее планового
     c.opStart=null;
     if(sch) c.tower=sch.tower;
+    tgEvent(`✓ ${minToClock(c.doneStart!=null?c.doneStart:0)}–${minToClock(c.doneEnd)}  ${c.name?c.name+' — ':''}${cardLabel(c)} · стол ${(c.tower||0)+1} — выполнена (${Math.round(c.doneEnd-(c.doneStart||0))} мин)`);
   }
   manualOps=null; saveSettings(); render();
   if(withImpl){ openImplants(id); const e=$('implEditor'); if(e) e.scrollIntoView({block:'center',behavior:'smooth'}); }
@@ -1467,7 +1491,8 @@ function saveBreak(){
   const note=$('br_note').value.trim();
   if(pastBlkId){
     const b=manualBlocks.find(x=>x.id===pastBlkId); if(b){ b.from=from; b.to=to; b.station=station; b.note=note; }
-  } else manualBlocks.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6), station, from, to, note});
+  } else { manualBlocks.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6), station, from, to, note});
+    tgEvent(`⏸ ${minToClock(from)}–${minToClock(to)}  ${note||'перерыв'} · ${station==='all'?'все столы':'стол '+(station+1)} (${to-from} мин)`); }
   manualOps=null; saveSettings(); render(); closePast();
 }
 function deleteBreak(){
@@ -1495,6 +1520,7 @@ function savePast(){
       status:'done', doneEnd:end, doneStart:start, tower, implants:[]});
     // операция из прошлого → включаем «остаток дня», чтобы план ушёл за «сейчас», а блок лёг на своё место
     if(isTodayPlan() && !useDoneLog){ useDoneLog=true; const cb=$('use_done'); if(cb) cb.checked=true; }
+    tgEvent(`✓ ${minToClock(start)}–${minToClock(end)}  ${nm?nm+' — ':''}${OPS[pastType]?OPS[pastType].label:'Операция'} · стол ${tower+1} — выполнена (внесено задним числом)`);
   }
   cardsRenderedSig=null; manualOps=null; saveSettings(); render();
   closePast();
@@ -1670,6 +1696,61 @@ function sliceExams(){
   planCards().concat(doneCards()).forEach(c=>{ if(c.exam&&c.exam.trim()) withExam.push(c); });
   if(!withExam.length) return 'Осмотры дня\n\nосмотров пока нет — кнопка «📝 Осмотр» в шапке';
   return 'Осмотры дня\n\n'+withExam.map(c=>c.exam.trim()).join('\n\n---\n\n');
+}
+
+/* ---------- отчёт дня «что сделали» + Telegram ---------- */
+function reportItems(){
+  const s=readState(); const items=[];
+  cards.forEach(c=>{
+    const lbl=cardLabel(c), nm=c.name||'';
+    if(c.status==='done'){ const de=c.doneEnd!=null?c.doneEnd:0; const ds=c.doneStart!=null?c.doneStart:Math.max(0,de-((c.dur>0?+c.dur:null)||durOfType(c.type)||45));
+      items.push({k:'done',s:ds,e:de,tower:c.tower||0,nm,lbl,impl:c.implants||[],photos:(c.photos||[]).length,exam:!!(c.exam&&c.exam.trim())}); }
+    else if(c.status==='op'){ items.push({k:'run',s:c.opStart||0,e:(c.opStart||0)+((c.dur>0?+c.dur:null)||durOfType(c.type)||45),tower:c.tower||0,nm,lbl,impl:c.implants||[]}); }
+  });
+  (manualBlocks||[]).forEach(b=>{ if(b.id) items.push({k:'break',s:b.from,e:b.to,tower:b.station==='all'?-1:(+b.station||0),nm:b.note||'',lbl:'перерыв'}); });
+  (lastPlanSched||[]).forEach(o=>{ if(o._card) items.push({k:'plan',s:o.start,e:o.end,tower:o.tower,nm:o._name||'',lbl:opLabel(o),pinned:!!o.pinned}); });
+  items.sort((a,b)=>a.s-b.s||a.tower-b.tower);
+  return items;
+}
+function sliceReport(){
+  const it=reportItems(); const tw=x=>x.tower<0?'все столы':'стол '+(x.tower+1);
+  let out='Отчёт дня — что сделали\n\n';
+  if(!it.length) return out+'пока пусто';
+  it.forEach(x=>{
+    const who=x.nm?x.nm+' — '+x.lbl:x.lbl;
+    if(x.k==='done'){ out+=`✓ ${fmtTime(x.s)}–${fmtTime(x.e)}  ${who} · ${tw(x)} · ${Math.round(x.e-x.s)} мин${x.exam?' · 📝':''}\n`; x.impl.forEach(i=>{ out+=`      ${implLine(i)}\n`; }); if(x.photos) out+=`      фото этикеток: ${x.photos}\n`; }
+    else if(x.k==='run') out+=`▶ ${fmtTime(x.s)}–…  ${who} · ${tw(x)} · идёт\n`;
+    else if(x.k==='break') out+=`⏸ ${fmtTime(x.s)}–${fmtTime(x.e)}  ${x.nm||'перерыв'} · ${tw(x)} · ${Math.round(x.e-x.s)} мин\n`;
+    else out+=`○ ${fmtTime(x.s)}–${fmtTime(x.e)}  ${who} · ${tw(x)}${x.pinned?' · 📌':''} — в плане\n`;
+  });
+  const done=it.filter(x=>x.k==='done'), br=it.filter(x=>x.k==='break'), plan=it.filter(x=>x.k==='plan');
+  const nImpl=done.reduce((a,x)=>a+x.impl.reduce((b,i)=>b+(+i.q||0),0),0);
+  const lost=br.reduce((a,x)=>a+(x.e-x.s),0);
+  out+=`\nИтого: выполнено ${done.length}${it.some(x=>x.k==='run')?', идёт 1':''}, в плане ${plan.length}; импланты ${nImpl} шт.; перерывы ${lost} мин${br.length?' ('+br.map(x=>(x.nm||'перерыв')+' '+Math.round(x.e-x.s)).join(', ')+')':''}`;
+  if(plan.length) out+=`; план закончится в ${fmtTime(Math.max.apply(null,plan.map(x=>x.e)))}`;
+  return out+'\n';
+}
+function tgMode(){ const m=$('p_tg_mode')?$('p_tg_mode').value:'off'; if(m==='direct'&&$('p_tg_token').value.trim()&&$('p_tg_chat').value.trim()) return 'direct'; if(m==='bridge'&&$('p_tg_url').value.trim()) return 'bridge'; return 'off'; }
+function tgModeUI(){ const m=$('p_tg_mode')?$('p_tg_mode').value:'off'; const d=$('tgDirect'),b=$('tgBridge'),l=$('tgLiveRow'); if(d) d.style.display=m==='direct'?'':'none'; if(b) b.style.display=m==='bridge'?'':'none'; if(l) l.style.display=m==='off'?'none':''; const h=$('accTgHint'); if(h) h.textContent=m==='off'?'через «Поделиться»':(m==='direct'?'напрямую':'через мост'); }
+async function tgSend(kind, text){
+  const m=tgMode(); if(m==='off') throw new Error('Telegram не настроен');
+  const date=($('p_date')&&$('p_date').value)||todayISO();
+  if(m==='direct'){
+    const r=await fetch('https://api.telegram.org/bot'+encodeURIComponent($('p_tg_token').value.trim())+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:$('p_tg_chat').value.trim(),text,disable_notification:kind==='event'})});
+    const j=await r.json().catch(()=>({})); if(!r.ok||!j.ok) throw new Error(j.description||('HTTP '+r.status)); return true;
+  }
+  const r=await fetch($('p_tg_url').value.trim().replace(/\/+$/,'')+'/api/opday',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('p_tg_key').value.trim(),app:'arthro',date,kind,text,state:kind==='report'?{items:reportItems()}:undefined})});
+  const j=await r.json().catch(()=>({})); if(!r.ok||!j.ok) throw new Error(j.error||('HTTP '+r.status)); return true;
+}
+function tgLiveOn(){ return tgMode()!=='off' && $('p_tg_live') && $('p_tg_live').value==='yes'; }
+function tgEvent(text){ if(!tgLiveOn()) return; tgSend('event', text).catch(e=>{ console.warn('telegram:',e.message); const n=$('tgNote'); if(n) n.textContent='Событие не ушло в Telegram: '+e.message; }); }
+function tgNote(msg, bad){ const n=$('tgNote'); if(n){ n.innerHTML=bad?'<b style="color:var(--bad)">'+escHtml(msg)+'</b>':escHtml(msg); } }
+async function tgTest(){ tgNote('Отправляю…'); try{ await tgSend('event','Артроплан на связи ✓'); tgNote('Ушло — проверьте чат.'); }catch(e){ tgNote('Не вышло: '+e.message, true); } }
+async function sendReport(){
+  const text=sliceHeader()+sliceReport();
+  if(tgMode()==='off'){ if(navigator.share) navigator.share({text}).catch(()=>{}); else if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text); alert('Скопировано — вставьте в чат.'); } return; }
+  try{ await tgSend('report', text); tgNote('Отчёт ушёл в Telegram ✓'); alert('Отчёт ушёл в Telegram ✓'); }
+  catch(e){ tgNote('Отчёт не ушёл: '+e.message+' — открываю «Поделиться»', true); if(navigator.share) navigator.share({text}).catch(()=>{}); }
 }
 
 /* ---------- разделы (как в банковском приложении): День · Срезы · Настройки ---------- */
@@ -1944,7 +2025,7 @@ function renderWeek(){
 
 /* ---------- сохранение всех настроек между перезагрузками ---------- */
 const SETTINGS_KEY='arthroSettings1';
-const PERSIST_IDS=['inv_towers','inv_optics','inv_shavers','set_shoulder','set_acl','set_meniscus','set_latarjet','p_anesteams','p_date','p_tables','p_day','p_ster','p_turnover','d_bankart','d_cuff','d_acl','d_meniscus','d_latarjet','a_bankart','a_cuff','a_acl','a_meniscus','a_latarjet','am_bankart','am_cuff','am_acl','am_meniscus','am_latarjet'];
+const PERSIST_IDS=['inv_towers','inv_optics','inv_shavers','set_shoulder','set_acl','set_meniscus','set_latarjet','p_anesteams','p_date','p_tables','p_day','p_ster','p_turnover','d_bankart','d_cuff','d_acl','d_meniscus','d_latarjet','a_bankart','a_cuff','a_acl','a_meniscus','a_latarjet','am_bankart','am_cuff','am_acl','am_meniscus','am_latarjet','p_tg_mode','p_tg_token','p_tg_chat','p_tg_url','p_tg_key','p_tg_live'];
 function saveSettings(){
   try{
     const f={}; PERSIST_IDS.forEach(id=>{const el=$(id); if(el) f[id]=el.value;});
@@ -3023,7 +3104,7 @@ document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEE
 // колесо мыши над числовым полем не должно менять значение, но и не выбивать фокус при прокрутке страницы
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(()=>{ renderSter(); renderLive(); },1000);
-loadSettings();
+loadSettings(); tgModeUI();
 // приложение всегда открывается на СЕГОДНЯ: вчерашний план сохраняется под своей датой в неделе
 (function(){
   const d=$('p_date'), t=todayISO();
