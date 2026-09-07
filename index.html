@@ -874,6 +874,16 @@
 
   <!-- РЕСУРСЫ И ХИРУРГИ -->
   <details class="acc" data-tab="settings">
+    <summary>Сервер клиники — общий день бригады<span class="acc-hint" id="accSyncHint"></span><span class="chev">▾</span></summary>
+    <div class="acc-body">
+      <div class="row"><label>Адрес сервера</label><input type="text" id="p_sync_url" placeholder="https://…" onchange="saveSettings();syncKick()"></div>
+      <div class="row"><label>Ключ команды <span class="sub">TEAM_KEY из .env сервера; один на бригаду</span></label><input type="text" id="p_sync_key" placeholder="ключ" onchange="saveSettings();syncKick()" autocomplete="off"></div>
+      <div class="btnrow"><button class="btn sm primary" onclick="syncTest()">Проверить связь</button><button class="btn sm" onclick="syncPull(true)">Обновить с сервера</button></div>
+      <div class="note" id="syncNote">Когда сервер задан, день общий для всех телефонов бригады, а отчёт и события в Telegram шлёт сам сервер — токен бота живёт только там, выключить отправку с телефона нельзя.</div>
+    </div>
+  </details>
+
+  <details class="acc" data-tab="settings">
     <summary>Telegram — отчёт и события дня<span class="acc-hint" id="accTgHint"></span><span class="chev">▾</span></summary>
     <div class="acc-body">
       <div class="row"><label>Куда отправлять <span class="sub">кнопка «📤 Отчёт» и живые события</span></label>
@@ -1125,7 +1135,7 @@ let lastPlanSched=[];     // расписание последнего расч�
 const newCardId=()=>'k'+Date.now()+Math.random().toString(36).slice(2,5);
 function sanitizeCards(arr){
   return (arr||[]).map(x=>({
-    id:x.id||newCardId(),
+    id:x.id||newCardId(), _u:(isFinite(+x._u)&&+x._u>0)?+x._u:undefined,
     type:(OPS[x.type]||x.type==='custom')?x.type:'bankart',
     label:typeof x.label==='string'?x.label:'',
     joint:(x.joint&&JOINTS[x.joint])?x.joint:'knee',
@@ -1730,11 +1740,12 @@ function sliceReport(){
   if(plan.length) out+=`; план закончится в ${fmtTime(Math.max.apply(null,plan.map(x=>x.e)))}`;
   return out+'\n';
 }
-function tgMode(){ const m=$('p_tg_mode')?$('p_tg_mode').value:'off'; if(m==='direct'&&$('p_tg_token').value.trim()&&$('p_tg_chat').value.trim()) return 'direct'; if(m==='bridge'&&$('p_tg_url').value.trim()) return 'bridge'; return 'off'; }
+function tgMode(){ if(syncOn()) return 'sync'; const m=$('p_tg_mode')?$('p_tg_mode').value:'off'; if(m==='direct'&&$('p_tg_token').value.trim()&&$('p_tg_chat').value.trim()) return 'direct'; if(m==='bridge'&&$('p_tg_url').value.trim()) return 'bridge'; return 'off'; }
 function tgModeUI(){ const m=$('p_tg_mode')?$('p_tg_mode').value:'off'; const d=$('tgDirect'),b=$('tgBridge'),l=$('tgLiveRow'); if(d) d.style.display=m==='direct'?'':'none'; if(b) b.style.display=m==='bridge'?'':'none'; if(l) l.style.display=m==='off'?'none':''; const h=$('accTgHint'); if(h) h.textContent=m==='off'?'через «Поделиться»':(m==='direct'?'напрямую':'через мост'); }
 async function tgSend(kind, text){
   const m=tgMode(); if(m==='off') throw new Error('Telegram не настроен');
   const date=($('p_date')&&$('p_date').value)||todayISO();
+  if(m==='sync'){ if(kind!=='report'){ return true; } const r=await syncFetch('POST','/api/report/'+date,{text}); if(!r.ok) throw new Error(r.error||'сервер не принял'); return true; }
   if(m==='direct'){
     const r=await fetch('https://api.telegram.org/bot'+encodeURIComponent($('p_tg_token').value.trim())+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:$('p_tg_chat').value.trim(),text,disable_notification:kind==='event'})});
     const j=await r.json().catch(()=>({})); if(!r.ok||!j.ok) throw new Error(j.description||('HTTP '+r.status)); return true;
@@ -1745,13 +1756,83 @@ async function tgSend(kind, text){
 function tgLiveOn(){ return tgMode()!=='off' && $('p_tg_live') && $('p_tg_live').value==='yes'; }
 function tgEvent(text){ if(!tgLiveOn()) return; tgSend('event', text).catch(e=>{ console.warn('telegram:',e.message); const n=$('tgNote'); if(n) n.textContent='Событие не ушло в Telegram: '+e.message; }); }
 function tgNote(msg, bad){ const n=$('tgNote'); if(n){ n.innerHTML=bad?'<b style="color:var(--bad)">'+escHtml(msg)+'</b>':escHtml(msg); } }
-async function tgTest(){ tgNote('Отправляю…'); try{ await tgSend('event','Артроплан на связи ✓'); tgNote('Ушло — проверьте чат.'); }catch(e){ tgNote('Не вышло: '+e.message, true); } }
+async function tgTest(){ if(syncOn()){ tgNote('Telegram работает через сервер клиники — проверяйте связь в разделе «Сервер клиники».'); return; } tgNote('Отправляю…'); try{ await tgSend('event','Артроплан на связи ✓'); tgNote('Ушло — проверьте чат.'); }catch(e){ tgNote('Не вышло: '+e.message, true); } }
 async function sendReport(){
   const text=sliceHeader()+sliceReport();
   if(tgMode()==='off'){ if(navigator.share) navigator.share({text}).catch(()=>{}); else if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text); alert('Скопировано — вставьте в чат.'); } return; }
   try{ await tgSend('report', text); tgNote('Отчёт ушёл в Telegram ✓'); alert('Отчёт ушёл в Telegram ✓'); }
   catch(e){ tgNote('Отчёт не ушёл: '+e.message+' — открываю «Поделиться»', true); if(navigator.share) navigator.share({text}).catch(()=>{}); }
 }
+
+/* ---------- синхронизация с сервером клиники: общий день бригады ---------- */
+const SYNC_DEL_KEY='arthroSyncDel1';
+let syncSig={}, syncBlkSig={}, syncDel={cards:[],blocks:[]}, syncTimer=null, syncRev=null, syncRevDay=null, syncBusy=false, syncLastErr='';
+try{ syncDel=JSON.parse(localStorage.getItem(SYNC_DEL_KEY)||'null')||syncDel; }catch(e){}
+function syncOn(){ const u=$('p_sync_url'), k=$('p_sync_key'); return !!(u&&k&&u.value.trim()&&k.value.trim()); }
+function syncBase(){ return $('p_sync_url').value.trim().replace(/\/+$/,''); }
+async function syncFetch(method, path, bodyObj){
+  const r=await fetch(syncBase()+path,{method,headers:{'Content-Type':'application/json','X-Team-Key':$('p_sync_key').value.trim()},body:bodyObj?JSON.stringify(bodyObj):undefined});
+  const j=await r.json().catch(()=>({ok:false,error:'HTTP '+r.status})); if(!r.ok&&!j.error) j.error='HTTP '+r.status; return j;
+}
+function syncStatus(msg,bad){ const n=$('syncNote'); if(n) n.innerHTML=bad?'<b style="color:var(--bad)">'+escHtml(msg)+'</b>':escHtml(msg); const h=$('accSyncHint'); if(h) h.textContent=syncOn()?(bad?'ошибка':'подключено'):'выключено'; const th=$('accTgHint'); if(th&&syncOn()) th.textContent='через сервер'; }
+// штамп правок: у изменившихся карточек/перерывов обновляем _u, удалённые запоминаем — вызывается из saveSettings
+function syncStamp(){
+  const now=Date.now(); const seen={};
+  cards.forEach(c=>{ const s=JSON.stringify({...c,_u:undefined}); if(syncSig[c.id]!==s){ if(syncSig[c.id]!==undefined || !c._u) c._u=now; syncSig[c.id]=s; } seen[c.id]=1; });
+  Object.keys(syncSig).forEach(id=>{ if(!seen[id]){ delete syncSig[id]; if(syncDel.cards.indexOf(id)<0) syncDel.cards.push(id); } });
+  const seenB={};
+  (manualBlocks||[]).forEach(b=>{ if(!b.id) b.id=now+'-'+Math.random().toString(36).slice(2,6); const s=JSON.stringify({...b,_u:undefined}); if(syncBlkSig[b.id]!==s){ if(syncBlkSig[b.id]!==undefined || !b._u) b._u=now; syncBlkSig[b.id]=s; } seenB[b.id]=1; });
+  Object.keys(syncBlkSig).forEach(id=>{ if(!seenB[id]){ delete syncBlkSig[id]; if(syncDel.blocks.indexOf(id)<0) syncDel.blocks.push(id); } });
+  try{ localStorage.setItem(SYNC_DEL_KEY, JSON.stringify(syncDel)); }catch(e){}
+}
+function syncKick(){ if(!syncOn()) return; clearTimeout(syncTimer); syncTimer=setTimeout(syncPush, 1200); }
+async function syncPush(){
+  if(!syncOn()||syncBusy) return; syncBusy=true;
+  const date=curDay||todayISO(); const delC=syncDel.cards.slice(), delB=syncDel.blocks.slice();
+  try{
+    const j=await syncFetch('PUT','/api/day/'+date,{cards:cards.map(c=>({...c,lbl:cardLabel(c)})), blocks:manualBlocks, deletedCards:delC, deletedBlocks:delB, useDoneLog, report:sliceHeader()+sliceReport()});
+    if(!j.ok) throw new Error(j.error||'сервер не принял');
+    syncDel.cards=syncDel.cards.filter(x=>delC.indexOf(x)<0); syncDel.blocks=syncDel.blocks.filter(x=>delB.indexOf(x)<0); try{ localStorage.setItem(SYNC_DEL_KEY, JSON.stringify(syncDel)); }catch(e){}
+    syncApply(j.day); syncLastErr=''; syncStatus('Синхронизировано '+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+' · версия '+j.day.rev);
+  }catch(e){ syncLastErr=e.message; syncStatus('Нет связи с сервером: '+e.message+' — работаем локально, отправлю позже', true); }
+  finally{ syncBusy=false; }
+}
+async function syncPull(manual){
+  if(!syncOn()||syncBusy) return; if(!manual && document.hidden) return; syncBusy=true;
+  const date=curDay||todayISO();
+  try{
+    const j=await syncFetch('GET','/api/day/'+date+(syncRevDay===date&&syncRev!=null?'?rev='+syncRev:''));
+    if(!j.ok) throw new Error(j.error||'ошибка'); if(!j.same) syncApply(j.day);
+    if(manual) syncStatus('Обновлено с сервера · версия '+(j.same?j.rev:j.day.rev));
+    if(syncLastErr){ syncLastErr=''; syncKick(); }
+  }catch(e){ if(manual) syncStatus('Нет связи: '+e.message, true); }
+  finally{ syncBusy=false; }
+}
+// слияние присланного сервером в локальный день: новее — побеждает, удалённое на сервере — уходит
+function syncApply(day){
+  if(!day||day.date!==(curDay||todayISO())) return; syncRev=day.rev; syncRevDay=day.date;
+  let changed=false; const up=x=>Number(x&&x._u)||0;
+  const delC=new Set(day.deletedCards||[]), delB=new Set(day.deletedBlocks||[]);
+  const srv={}; (day.cards||[]).forEach(c=>srv[c.id]=c);
+  const next=[]; const localIds=new Set();
+  cards.forEach(c=>{ localIds.add(c.id); const s=srv[c.id];
+    if(s){ if(up(s)>up(c)){ next.push(s); changed=true; } else next.push(c); }
+    else if(delC.has(c.id) && syncDel.cards.indexOf(c.id)<0){ changed=true; }   // удалили на другом телефоне
+    else next.push(c); });
+  (day.cards||[]).forEach(s=>{ if(!localIds.has(s.id) && syncDel.cards.indexOf(s.id)<0){ next.push(s); changed=true; } });
+  const srvB={}; (day.blocks||[]).forEach(b=>srvB[b.id]=b); const nextB=[]; const localB=new Set();
+  (manualBlocks||[]).forEach(b=>{ localB.add(b.id); const s=srvB[b.id]; if(s){ if(up(s)>up(b)){ nextB.push(s); changed=true; } else nextB.push(b); } else if(delB.has(b.id) && syncDel.blocks.indexOf(b.id)<0){ changed=true; } else nextB.push(b); });
+  (day.blocks||[]).forEach(s=>{ if(!localB.has(s.id) && syncDel.blocks.indexOf(s.id)<0){ nextB.push(s); changed=true; } });
+  if(changed){
+    cards=sanitizeCards(next).map((c,i)=>Object.assign(c,{_u:next[i]&&next[i]._u})); manualBlocks=nextB;
+    if(typeof day.useDoneLog==='boolean' && day.useDoneLog && !useDoneLog){ useDoneLog=true; const cb=$('use_done'); if(cb) cb.checked=true; }
+    cards.forEach(c=>{ syncSig[c.id]=JSON.stringify({...c,_u:undefined}); }); manualBlocks.forEach(b=>{ syncBlkSig[b.id]=JSON.stringify({...b,_u:undefined}); });
+    cardsRenderedSig=null; manualOps=null; saveSettings(); render();
+  }
+}
+async function syncTest(){ if(!syncOn()){ syncStatus('Впишите адрес и ключ.', true); return; } syncStatus('Проверяю…'); try{ const j=await syncFetch('GET','/api/ping'); if(!j.ok) throw new Error(j.error||'нет ответа'); const j2=await syncFetch('GET','/api/days'); if(!j2.ok) throw new Error(j2.error||'ключ не подошёл'); syncStatus('Сервер на связи. Бот: '+(j.bot?'включён, получателей '+j.recipients:'токен не задан')+'. Дней на сервере: '+(j2.days||[]).length); syncKick(); }catch(e){ syncStatus('Не вышло: '+e.message, true); } }
+setInterval(()=>syncPull(false), 10000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) syncPull(false); });
 
 /* ---------- разделы (как в банковском приложении): День · Срезы · Настройки ---------- */
 let curTab='day';
@@ -2025,9 +2106,10 @@ function renderWeek(){
 
 /* ---------- сохранение всех настроек между перезагрузками ---------- */
 const SETTINGS_KEY='arthroSettings1';
-const PERSIST_IDS=['inv_towers','inv_optics','inv_shavers','set_shoulder','set_acl','set_meniscus','set_latarjet','p_anesteams','p_date','p_tables','p_day','p_ster','p_turnover','d_bankart','d_cuff','d_acl','d_meniscus','d_latarjet','a_bankart','a_cuff','a_acl','a_meniscus','a_latarjet','am_bankart','am_cuff','am_acl','am_meniscus','am_latarjet','p_tg_mode','p_tg_token','p_tg_chat','p_tg_url','p_tg_key','p_tg_live'];
+const PERSIST_IDS=['inv_towers','inv_optics','inv_shavers','set_shoulder','set_acl','set_meniscus','set_latarjet','p_anesteams','p_date','p_tables','p_day','p_ster','p_turnover','d_bankart','d_cuff','d_acl','d_meniscus','d_latarjet','a_bankart','a_cuff','a_acl','a_meniscus','a_latarjet','am_bankart','am_cuff','am_acl','am_meniscus','am_latarjet','p_tg_mode','p_tg_token','p_tg_chat','p_tg_url','p_tg_key','p_tg_live','p_sync_url','p_sync_key'];
 function saveSettings(){
   try{
+    if(typeof syncStamp==='function' && syncOn()){ syncStamp(); syncKick(); }
     const f={}; PERSIST_IDS.forEach(id=>{const el=$(id); if(el) f[id]=el.value;});
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({fields:f, tableWin, blocks:manualBlocks, useDoneLog, surgeons:surgeonList, cards}));
     if(curDay){ dayStore[curDay]=daySnapshot(); localStorage.setItem(DAYS_KEY, JSON.stringify(dayStore)); }
@@ -3104,7 +3186,14 @@ document.addEventListener('input',e=>{ if(manualOps && !(e.target && (MANUAL_KEE
 // колесо мыши над числовым полем не должно менять значение, но и не выбивать фокус при прокрутке страницы
 document.addEventListener('wheel',e=>{ const a=document.activeElement; if(a && a.type==='number' && a===e.target){ a.blur(); } },{passive:true});
 setInterval(()=>{ renderSter(); renderLive(); },1000);
-loadSettings(); tgModeUI();
+loadSettings(); tgModeUI(); cards.forEach(c=>{ syncSig[c.id]=JSON.stringify({...c,_u:undefined}); }); (manualBlocks||[]).forEach(b=>{ if(b.id) syncBlkSig[b.id]=JSON.stringify({...b,_u:undefined}); }); syncStatus(syncOn()?'Сервер задан — синхронизирую…':'Сервер не задан.'); if(syncOn()) setTimeout(()=>syncPull(false),300);
+// автонастройка сервера по ссылке: …/#sync=<адрес>|<ключ>
+(function(){ try{
+  const m=(location.hash||'').match(/^#sync=(https?:\/\/[^|]+)\|(.+)$/); if(!m) return;
+  $('p_sync_url').value=m[1]; $('p_sync_key').value=decodeURIComponent(m[2]); saveSettings(); history.replaceState(null,'',location.pathname+location.search);
+  showTab('settings'); document.querySelectorAll('details.acc[data-tab="settings"]').forEach(d=>{ d.open=!!d.querySelector('#p_sync_url'); });
+  syncTest(); setTimeout(()=>{ const e=$('p_sync_url'); if(e) e.scrollIntoView({block:'center'}); },100);
+}catch(e){} })();
 // автонастройка Telegram по ссылке: …/#tg=<токен>:<chat_id>  (хвост стирается из адреса сразу)
 (function(){ try{
   const m=(location.hash||'').match(/^#tg=([^:]+:[^:]+):(-?\d+)$/); if(!m) return;

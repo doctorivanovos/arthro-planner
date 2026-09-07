@@ -1,6 +1,6 @@
 // Артроплан: офлайн-кэш. Стратегия «сеть — прежде всего»: онлайн всегда свежая
 // версия, без сети — последняя закэшированная.
-const CACHE = 'arthro-v3';
+const CACHE = 'arthro-v4';
 const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -16,6 +16,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // чужие адреса (сервер клиники, Telegram) не трогаем — только сама страница и её файлы
+  if (new URL(req.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(req).then(res => {
       const copy = res.clone();
